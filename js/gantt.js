@@ -23,6 +23,16 @@
     assistant: '助理',
     assistantTeacher: '助教'
   };
+  const LARK_FIELDS = {
+    day: '礼拜几',
+    block: 'BLOCK',
+    studentCount: '时段人数',
+    timeRange: '时间段',
+    daycare: 'DAYCARE老师',
+    teaching: '教书老师',
+    assistant: '助理',
+    assistantTeacher: '助教'
+  };
 
   const state = {
     records: [],
@@ -48,6 +58,7 @@
   const elThresholdManpower = $('#threshold-manpower');
   const elRefresh = $('#refresh');
   const elReset = $('#reset');
+  const elAddSlot = $('#add-slot');
   const elGantt = $('#gantt-root');
   const elSummary = $('#summary');
   const elTeachersSummary = $('#teachers-summary');
@@ -151,13 +162,40 @@
 
   function unique(arr) { return Array.from(new Set(arr)); }
 
+  function allTeachers() {
+    return unique(state.records.flatMap((r) => [
+      ...r.daycareTeachers, ...r.teachingTeachers, ...r.assistants, ...r.assistantTeachers
+    ])).sort((a, b) => a.localeCompare(b, 'zh'));
+  }
+
+  function allBlocks() {
+    return unique(state.records.map((r) => r.block).filter(Boolean)).sort();
+  }
+
+  function timeOptions() {
+    const out = [];
+    for (let m = AXIS_START; m <= AXIS_END; m += 30) {
+      out.push({ value: m, label: minutesToClock(m) });
+    }
+    return out;
+  }
+
+  function minutesToClock(total) {
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  function parseDayOption(day) {
+    const n = parseInt(day);
+    return isFinite(n) && n >= 1 && n <= 7 ? String(n) : (day || '1');
+  }
+
   function populateFilterOptions() {
     const days = unique(state.records.map((r) => r.day).filter(Boolean))
       .sort((a, b) => (parseInt(a) || 99) - (parseInt(b) || 99));
     const blocks = unique(state.records.map((r) => r.block).filter(Boolean)).sort();
-    const teachers = unique(state.records.flatMap((r) => [
-      ...r.daycareTeachers, ...r.teachingTeachers, ...r.assistants, ...r.assistantTeachers
-    ])).sort((a, b) => a.localeCompare(b, 'zh'));
+    const teachers = allTeachers();
 
     fillSelect(elDay, days, state.filters.day);
     fillSelect(elBlock, blocks, state.filters.block);
@@ -507,13 +545,18 @@
             <dt>人手学生比</dt><dd>${escapeHtml(manpowerRatioStr)}</dd>
             <dt>状态</dt><dd><span class="status-pill ${s.kind}" style="background: var(--status-${s.kind})">${escapeHtml(s.detail)}</span></dd>
           </dl>
-          <div class="actions">
-            <button id="modal-close" type="button">关闭</button>
+          <div class="actions split">
+            <button id="modal-edit" class="primary" type="button">编辑</button>
+            <div class="right">
+              <button id="modal-close" type="button">关闭</button>
+            </div>
           </div>
         </div>
       </div>
     `;
     bindModalCommon();
+    const editBtn = document.getElementById('modal-edit');
+    if (editBtn) editBtn.addEventListener('click', () => openScheduleEditor(rec));
     elModalRoot.querySelectorAll('[data-teacher]').forEach((el) => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -524,6 +567,254 @@
         openTeacherDetail(name, stats);
       });
     });
+  }
+
+  function defaultNewRecord() {
+    const day = state.filters.day || '1';
+    const block = state.filters.block || (allBlocks()[0] || '');
+    return {
+      recordId: '',
+      day,
+      dayOrder: parseInt(day) || 1,
+      block,
+      studentCount: 0,
+      timeRange: '07:30-09:30',
+      startMinutes: 450,
+      endMinutes: 570,
+      daycareTeachers: [],
+      teachingTeachers: [],
+      assistants: [],
+      assistantTeachers: []
+    };
+  }
+
+  function renderTeacherDatalist() {
+    const teachers = allTeachers();
+    return `<datalist id="teacher-suggestions">${teachers.map((t) => `<option value="${escapeHtml(t)}"></option>`).join('')}</datalist>`;
+  }
+
+  function renderTimeSelect(name, current, min) {
+    const opts = timeOptions()
+      .filter((opt) => min == null || opt.value > min)
+      .map((opt) => `<option value="${opt.value}" ${opt.value === current ? 'selected' : ''}>${opt.label}</option>`);
+    return `<select name="${name}" data-time-select="${name}">${opts.join('')}</select>`;
+  }
+
+  function renderTagField(role, values) {
+    const title = ROLE_LABEL[role];
+    const tags = (values || []).map((name) => `
+      <span class="tag" data-role="${role}" data-name="${escapeHtml(name)}">
+        ${escapeHtml(name)}
+        <button type="button" data-remove-tag="${role}" data-name="${escapeHtml(name)}" aria-label="移除 ${escapeHtml(name)}">×</button>
+      </span>
+    `).join('');
+    return `
+      <div class="tag-field" data-role-field="${role}">
+        <div class="tag-field-title">${escapeHtml(title)}</div>
+        <div class="tag-list" data-tag-list="${role}">${tags}</div>
+        <div class="tag-input-row">
+          <input type="text" data-tag-input="${role}" list="teacher-suggestions" placeholder="输入老师名字" />
+          <button type="button" data-add-tag="${role}">加入</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function openScheduleEditor(rec, mode) {
+    const isNew = mode === 'new' || !rec || !rec.recordId;
+    const data = rec || defaultNewRecord();
+    const start = data.startMinutes || 450;
+    const end = data.endMinutes && data.endMinutes > start ? data.endMinutes : start + 30;
+    const dayValue = parseDayOption(data.day);
+    state.modalOpen = true;
+
+    elModalRoot.innerHTML = `
+      <div class="modal-backdrop" id="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true">
+          <h2>${isNew ? '新增时段' : '编辑时段'}</h2>
+          <form class="edit-form" id="schedule-form">
+            <div class="edit-grid">
+              <label>礼拜
+                <select name="day">
+                  ${[1,2,3,4,5,6,7].map((d) => `<option value="${d}" ${String(d) === dayValue ? 'selected' : ''}>${d} · ${DAY_LABELS[d]}</option>`).join('')}
+                </select>
+              </label>
+              <label>BLOCK
+                <input name="block" type="text" value="${escapeHtml(data.block || '')}" list="block-suggestions" required />
+              </label>
+              <label>开始时间
+                ${renderTimeSelect('startMinutes', start)}
+              </label>
+              <label>结束时间
+                ${renderTimeSelect('endMinutes', end, start)}
+              </label>
+              <label>时段人数
+                <input name="studentCount" type="number" min="0" step="1" value="${escapeHtml(String(data.studentCount || 0))}" required />
+              </label>
+            </div>
+            ${renderTagField('daycare', data.daycareTeachers)}
+            ${renderTagField('teaching', data.teachingTeachers)}
+            ${renderTagField('assistant', data.assistants)}
+            ${renderTagField('assistantTeacher', data.assistantTeachers)}
+            <div class="form-error" id="form-error"></div>
+            <div class="actions split">
+              ${isNew ? '<span></span>' : '<button id="delete-slot" class="danger" type="button">删除</button>'}
+              <div class="right">
+                <button id="modal-close" type="button">取消</button>
+                <button class="primary" id="save-slot" type="submit">保存</button>
+              </div>
+            </div>
+          </form>
+          ${renderTeacherDatalist()}
+          <datalist id="block-suggestions">${allBlocks().map((b) => `<option value="${escapeHtml(b)}"></option>`).join('')}</datalist>
+        </div>
+      </div>
+    `;
+    bindModalCommon();
+    bindScheduleEditor(data, isNew);
+  }
+
+  function bindScheduleEditor(rec, isNew) {
+    const form = document.getElementById('schedule-form');
+    const startSelect = form.querySelector('[data-time-select="startMinutes"]');
+    const endWrap = startSelect.closest('label').nextElementSibling;
+
+    startSelect.addEventListener('change', () => {
+      const currentEnd = parseInt(form.elements.endMinutes.value);
+      const start = parseInt(startSelect.value);
+      endWrap.innerHTML = `结束时间${renderTimeSelect('endMinutes', currentEnd > start ? currentEnd : start + 30, start)}`;
+    });
+
+    form.querySelectorAll('[data-add-tag]').forEach((btn) => {
+      btn.addEventListener('click', () => addTag(btn.getAttribute('data-add-tag')));
+    });
+    form.querySelectorAll('[data-tag-input]').forEach((input) => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addTag(input.getAttribute('data-tag-input'));
+        }
+      });
+    });
+    form.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove-tag]');
+      if (!btn) return;
+      btn.closest('.tag').remove();
+    });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveScheduleForm(rec, isNew);
+    });
+    const deleteBtn = document.getElementById('delete-slot');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => deleteScheduleRecord(rec));
+    }
+  }
+
+  function addTag(role) {
+    const input = elModalRoot.querySelector(`[data-tag-input="${role}"]`);
+    const list = elModalRoot.querySelector(`[data-tag-list="${role}"]`);
+    const name = (input.value || '').trim();
+    if (!name) return;
+    const exists = Array.from(list.querySelectorAll('.tag'))
+      .some((tag) => tag.getAttribute('data-name') === name);
+    if (!exists) {
+      const span = document.createElement('span');
+      span.className = 'tag';
+      span.setAttribute('data-role', role);
+      span.setAttribute('data-name', name);
+      span.innerHTML = `${escapeHtml(name)} <button type="button" data-remove-tag="${role}" data-name="${escapeHtml(name)}" aria-label="移除 ${escapeHtml(name)}">×</button>`;
+      list.appendChild(span);
+    }
+    input.value = '';
+    input.focus();
+  }
+
+  function collectTags(role) {
+    return Array.from(elModalRoot.querySelectorAll(`[data-tag-list="${role}"] .tag`))
+      .map((tag) => tag.getAttribute('data-name'))
+      .filter(Boolean);
+  }
+
+  function buildFieldsFromForm() {
+    const form = document.getElementById('schedule-form');
+    const start = parseInt(form.elements.startMinutes.value);
+    const end = parseInt(form.elements.endMinutes.value);
+    if (!isFinite(start) || !isFinite(end) || end <= start) {
+      throw new Error('结束时间必须晚过开始时间');
+    }
+    const count = parseInt(form.elements.studentCount.value);
+    if (!isFinite(count) || count < 0) {
+      throw new Error('时段人数必须是 0 或以上');
+    }
+    return {
+      [LARK_FIELDS.day]: form.elements.day.value,
+      [LARK_FIELDS.block]: form.elements.block.value.trim(),
+      [LARK_FIELDS.timeRange]: `${minutesToClock(start)}-${minutesToClock(end)}`,
+      [LARK_FIELDS.studentCount]: count,
+      [LARK_FIELDS.daycare]: collectTags('daycare'),
+      [LARK_FIELDS.teaching]: collectTags('teaching'),
+      [LARK_FIELDS.assistant]: collectTags('assistant'),
+      [LARK_FIELDS.assistantTeacher]: collectTags('assistantTeacher')
+    };
+  }
+
+  async function postJson(url, payload) {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const text = await resp.text();
+    let data;
+    try { data = JSON.parse(text); } catch { throw new Error('接口返回非 JSON 数据'); }
+    if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+    return data;
+  }
+
+  function setFormBusy(busy) {
+    elModalRoot.querySelectorAll('button, input, select').forEach((el) => { el.disabled = busy; });
+  }
+
+  function showFormError(message) {
+    const el = document.getElementById('form-error');
+    if (el) el.textContent = message || '';
+  }
+
+  async function saveScheduleForm(rec, isNew) {
+    try {
+      showFormError('');
+      const fields = buildFieldsFromForm();
+      if (!fields[LARK_FIELDS.block]) throw new Error('BLOCK 不能为空');
+      setFormBusy(true);
+      await postJson(isNew ? '/api/create-schedule' : '/api/update-schedule', {
+        recordId: rec.recordId,
+        fields
+      });
+      closeModal();
+      state.lastPayloadHash = '';
+      await loadSchedule(false);
+    } catch (err) {
+      setFormBusy(false);
+      showFormError(err.message);
+    }
+  }
+
+  async function deleteScheduleRecord(rec) {
+    if (!rec || !rec.recordId) return;
+    const ok = window.confirm(`确定删除 ${rec.day} · ${rec.block} · ${rec.timeRange || '-'}？`);
+    if (!ok) return;
+    try {
+      showFormError('');
+      setFormBusy(true);
+      await postJson('/api/delete-schedule', { recordId: rec.recordId });
+      closeModal();
+      state.lastPayloadHash = '';
+      await loadSchedule(false);
+    } catch (err) {
+      setFormBusy(false);
+      showFormError(err.message);
+    }
   }
 
   function openTeacherDetail(name, statsList) {
@@ -684,6 +975,7 @@
       rerender();
     });
     elRefresh.addEventListener('click', () => loadSchedule(false));
+    elAddSlot.addEventListener('click', () => openScheduleEditor(defaultNewRecord(), 'new'));
     elReset.addEventListener('click', () => {
       state.filters = { day: '', block: '', role: '', teacher: '', status: '' };
       elDay.value = ''; elBlock.value = ''; elRole.value = '';

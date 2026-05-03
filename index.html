@@ -124,6 +124,10 @@
     color: var(--text);
     border: 1px solid var(--border);
   }
+  .filters button.danger {
+    background: var(--status-overloaded);
+    color: #fff;
+  }
 
   .summary {
     display: grid;
@@ -309,6 +313,8 @@
   }
   .modal .status-pill.warning { color: #1a1a1a; }
   .modal .actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+  .modal .actions.split { justify-content: space-between; gap: 8px; }
+  .modal .actions .right { display: flex; gap: 8px; }
   .modal .actions button {
     background: var(--panel-2);
     color: var(--text);
@@ -316,6 +322,99 @@
     border-radius: 6px;
     padding: 6px 14px;
     cursor: pointer;
+  }
+  .modal .actions button.primary {
+    background: var(--accent);
+    color: #0b1220;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .modal .actions button.danger {
+    background: var(--status-overloaded);
+    color: #fff;
+    border-color: var(--status-overloaded);
+  }
+  .modal .actions button:disabled { opacity: 0.6; cursor: wait; }
+  .edit-form {
+    display: grid;
+    gap: 12px;
+  }
+  .edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .edit-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .edit-form input,
+  .edit-form select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 9px;
+    font-size: 13px;
+    width: 100%;
+  }
+  .tag-field {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    background: rgba(15,23,42,0.28);
+  }
+  .tag-field-title {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 25px;
+    margin-bottom: 7px;
+  }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 7px;
+    font-size: 12px;
+  }
+  .tag button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .tag-input-row {
+    display: flex;
+    gap: 6px;
+  }
+  .tag-input-row input { flex: 1; }
+  .tag-input-row button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0 10px;
+    cursor: pointer;
+  }
+  .form-error {
+    color: #fca5a5;
+    font-size: 12px;
+    min-height: 16px;
   }
   .teacher-link {
     cursor: pointer;
@@ -483,6 +582,7 @@
   .view-section[hidden] { display: none; }
 
   @media (max-width: 720px) {
+    .edit-grid { grid-template-columns: 1fr; }
     .teachers-table th, .teachers-table td { padding: 6px 6px; font-size: 12px; }
     .teachers-table td.bar-cell { width: 120px; }
     .heatmap { grid-template-columns: 100px repeat(7, 1fr) 60px; font-size: 11px; }
@@ -556,6 +656,7 @@
     <input type="number" id="threshold-manpower" value="15" min="1" step="1" />
   </label>
   <span class="spacer"></span>
+  <button id="add-slot" type="button">新增时段</button>
   <button id="reset" class="secondary" type="button">重置筛选</button>
   <button id="refresh" type="button">刷新</button>
 </section>
