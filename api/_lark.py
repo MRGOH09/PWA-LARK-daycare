@@ -59,6 +59,30 @@ def records_url(env, record_id=None):
     return f"{base}/{record_id}" if record_id else base
 
 
+def raise_lark_http_error(resp, action):
+    if resp.status_code < 400:
+        return
+    detail = ""
+    try:
+        data = resp.json()
+        msg = data.get("msg") or data.get("message") or data.get("error")
+        code = data.get("code")
+        if msg:
+            detail = f"：{msg}"
+        if code is not None:
+            detail += f" (code {code})"
+    except Exception:
+        if resp.text:
+            detail = f"：{resp.text[:200]}"
+
+    if resp.status_code == 403:
+        raise RuntimeError(
+            f"Lark 拒绝{action}记录：当前 Lark App 对这个 Base/Table 没有写入或删除权限。"
+            f"请在 Lark 开放平台给 App 开启多维表格记录写入权限，并确认该 App 已被授权访问这个 Base{detail}"
+        )
+    raise RuntimeError(f"Lark {action}记录失败：HTTP {resp.status_code}{detail}")
+
+
 def fetch_all_records(token, env):
     headers = {"Authorization": f"Bearer {token}"}
     out = []
@@ -89,7 +113,7 @@ def lark_create_record(token, env, fields):
         json={"fields": fields},
         timeout=15,
     )
-    resp.raise_for_status()
+    raise_lark_http_error(resp, "新增")
     data = resp.json()
     if data.get("code") != 0:
         raise RuntimeError(f"Lark create error: {data.get('msg', 'unknown')} (code {data.get('code')})")
@@ -103,7 +127,7 @@ def lark_update_record(token, env, record_id, fields):
         json={"fields": fields},
         timeout=15,
     )
-    resp.raise_for_status()
+    raise_lark_http_error(resp, "更新")
     data = resp.json()
     if data.get("code") != 0:
         raise RuntimeError(f"Lark update error: {data.get('msg', 'unknown')} (code {data.get('code')})")
@@ -116,7 +140,7 @@ def lark_delete_record(token, env, record_id):
         headers={"Authorization": f"Bearer {token}"},
         timeout=15,
     )
-    resp.raise_for_status()
+    raise_lark_http_error(resp, "删除")
     data = resp.json()
     if data.get("code") != 0:
         raise RuntimeError(f"Lark delete error: {data.get('msg', 'unknown')} (code {data.get('code')})")
