@@ -686,7 +686,7 @@
                 </select>
               </label>
               <label>BLOCK
-                <input name="block" type="text" value="${escapeHtml(data.block || '')}" list="block-suggestions" required />
+                <input name="block" type="text" value="${escapeHtml(data.block || '')}" required />
               </label>
               <label>开始时间
                 ${renderTimeSelect('startMinutes', start)}
@@ -712,7 +712,6 @@
             </div>
           </form>
           ${renderTeacherDatalist()}
-          <datalist id="block-suggestions">${allBlocks().map((b) => `<option value="${escapeHtml(b)}"></option>`).join('')}</datalist>
         </div>
       </div>
     `;
