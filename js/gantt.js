@@ -641,14 +641,6 @@
     return allTeachers().filter((name) => roleMap.get(name) === role);
   }
 
-  function renderTeacherDatalists() {
-    return ROLE_KEYS.map((role) => `
-      <datalist id="teacher-suggestions-${role}">
-        ${compatibleTeachers(role).map((name) => `<option value="${escapeHtml(name)}"></option>`).join('')}
-      </datalist>
-    `).join('');
-  }
-
   function renderTimeSelect(name, current, min) {
     const opts = timeOptions()
       .filter((opt) => min == null || opt.value > min)
@@ -669,8 +661,9 @@
         <div class="tag-field-title">${escapeHtml(title)}</div>
         <div class="tag-list" data-tag-list="${role}">${tags}</div>
         <div class="tag-input-row">
-          <input type="text" data-tag-input="${role}" list="teacher-suggestions-${role}" placeholder="输入老师名字" />
+          <input type="text" data-tag-input="${role}" autocomplete="off" placeholder="输入老师名字" />
           <button type="button" data-add-tag="${role}">加入</button>
+          <div class="suggest-menu" data-suggest-menu="${role}"></div>
         </div>
       </div>
     `;
@@ -724,7 +717,6 @@
               </div>
             </div>
           </form>
-          ${renderTeacherDatalists()}
         </div>
       </div>
     `;
@@ -747,7 +739,13 @@
       btn.addEventListener('click', () => addTag(btn.getAttribute('data-add-tag')));
     });
     form.querySelectorAll('[data-tag-input]').forEach((input) => {
+      input.addEventListener('input', () => renderTeacherSuggestions(input.getAttribute('data-tag-input')));
+      input.addEventListener('focus', () => renderTeacherSuggestions(input.getAttribute('data-tag-input')));
       input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeTeacherSuggestions();
+          return;
+        }
         if (e.key === 'Enter') {
           e.preventDefault();
           addTag(input.getAttribute('data-tag-input'));
@@ -759,6 +757,16 @@
       if (!btn) return;
       btn.closest('.tag').remove();
     });
+    form.addEventListener('mousedown', (e) => {
+      const item = e.target.closest('[data-suggest-name]');
+      if (!item) return;
+      e.preventDefault();
+      const role = item.getAttribute('data-suggest-role');
+      const input = elModalRoot.querySelector(`[data-tag-input="${role}"]`);
+      input.value = item.getAttribute('data-suggest-name');
+      closeTeacherSuggestions();
+      input.focus();
+    });
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       saveScheduleForm(rec, isNew);
@@ -767,6 +775,40 @@
     if (deleteBtn) {
       deleteBtn.addEventListener('click', () => deleteScheduleRecord(rec));
     }
+  }
+
+  function renderTeacherSuggestions(role) {
+    const input = elModalRoot.querySelector(`[data-tag-input="${role}"]`);
+    const menu = elModalRoot.querySelector(`[data-suggest-menu="${role}"]`);
+    if (!input || !menu) return;
+    const query = (input.value || '').trim().toLowerCase();
+    const already = new Set([
+      ...collectTags(role),
+      ...ROLE_KEYS.filter((key) => key !== role).flatMap((key) => collectTags(key))
+    ]);
+    const suggestions = compatibleTeachers(role)
+      .filter((name) => !already.has(name))
+      .filter((name) => !query || name.toLowerCase().includes(query))
+      .slice(0, 10);
+    if (!suggestions.length) {
+      menu.classList.remove('open');
+      menu.innerHTML = '';
+      return;
+    }
+    menu.innerHTML = suggestions.map((name) => `
+      <button type="button" class="suggest-item" data-suggest-role="${role}" data-suggest-name="${escapeHtml(name)}">
+        <span>${escapeHtml(name)}</span>
+        <span class="role">${escapeHtml(ROLE_LABEL[role])}</span>
+      </button>
+    `).join('');
+    menu.classList.add('open');
+  }
+
+  function closeTeacherSuggestions() {
+    elModalRoot.querySelectorAll('.suggest-menu').forEach((menu) => {
+      menu.classList.remove('open');
+      menu.innerHTML = '';
+    });
   }
 
   function addTag(role) {
@@ -798,6 +840,7 @@
       span.innerHTML = `${escapeHtml(name)} <button type="button" data-remove-tag="${role}" data-name="${escapeHtml(name)}" aria-label="移除 ${escapeHtml(name)}">×</button>`;
       list.appendChild(span);
     }
+    closeTeacherSuggestions();
     showFormError('');
     input.value = '';
     input.focus();
