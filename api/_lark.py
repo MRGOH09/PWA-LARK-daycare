@@ -18,6 +18,13 @@ FIELD_TEACHING = "教书老师"
 FIELD_ASSISTANT = "助理"
 FIELD_ASSISTANT_TEACHER = "助教"
 
+ROLE_FIELDS = {
+    "daycare": FIELD_DAYCARE,
+    "teaching": FIELD_TEACHING,
+    "assistant": FIELD_ASSISTANT,
+    "assistantTeacher": FIELD_ASSISTANT_TEACHER,
+}
+
 WRITABLE_FIELDS = {
     FIELD_DAY, FIELD_BLOCK, FIELD_COUNT, FIELD_TIME,
     FIELD_DAYCARE, FIELD_TEACHING, FIELD_ASSISTANT, FIELD_ASSISTANT_TEACHER,
@@ -276,6 +283,42 @@ def sanitize_fields(raw):
         else:
             out[k] = "" if v is None else str(v).strip()
     return out
+
+
+def validate_teacher_role_bindings(token, env, fields, current_record_id=None):
+    role_by_teacher = {}
+    conflicts = set()
+
+    def add_binding(name, role_key):
+        if not name:
+            return
+        prev = role_by_teacher.get(name)
+        if prev and prev != role_key:
+            conflicts.add(name)
+        else:
+            role_by_teacher[name] = role_key
+
+    for item in fetch_all_records(token, env):
+        raw = item.get("fields", {}) or {}
+        for role_key, field_name in ROLE_FIELDS.items():
+            for name in extract_list(raw.get(field_name)):
+                add_binding(name, role_key)
+
+    submitted = {}
+    for role_key, field_name in ROLE_FIELDS.items():
+        for name in extract_list(fields.get(field_name)):
+            prev = submitted.get(name)
+            if prev and prev != role_key:
+                raise RuntimeError(f"老师 {name} 在同一笔记录里被放进多个角色")
+            submitted[name] = role_key
+
+            known_role = role_by_teacher.get(name)
+            if known_role and known_role != role_key:
+                raise RuntimeError(
+                    f"老师 {name} 已绑定为 {ROLE_FIELDS[known_role]}，不能写入 {field_name}"
+                )
+            if name in conflicts:
+                raise RuntimeError(f"老师 {name} 在现有 Lark 数据里已有多个角色，请先清理")
 
 
 def send_json(handler, status, payload):

@@ -5,7 +5,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lark import (
     get_env, get_tenant_access_token, lark_create_record,
-    normalize_record, sanitize_fields, send_json, read_json_body,
+    normalize_record, sanitize_fields, validate_teacher_role_bindings,
+    send_json, read_json_body,
 )
 
 
@@ -20,6 +21,7 @@ class handler(BaseHTTPRequestHandler):
 
             env = get_env()
             token = get_tenant_access_token(env["LARK_APP_ID"], env["LARK_APP_SECRET"])
+            validate_teacher_role_bindings(token, env, fields)
             result = lark_create_record(token, env, fields)
             send_json(self, 200, {
                 "success": True,

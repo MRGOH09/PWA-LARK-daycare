@@ -168,6 +168,25 @@
     ])).sort((a, b) => a.localeCompare(b, 'zh'));
   }
 
+  function teacherRoleMap() {
+    const map = new Map();
+    for (const rec of state.records) {
+      for (const role of ROLE_KEYS) {
+        for (const name of rec[ROLE_FIELD[role]] || []) {
+          if (!name) continue;
+          const prev = map.get(name);
+          if (prev && prev !== role) map.set(name, 'conflict');
+          else map.set(name, role);
+        }
+      }
+    }
+    return map;
+  }
+
+  function knownTeacherRole(name) {
+    return teacherRoleMap().get(name) || '';
+  }
+
   function allBlocks() {
     return unique(state.records.map((r) => r.block).filter(Boolean)).sort();
   }
@@ -589,8 +608,13 @@
   }
 
   function renderTeacherDatalist() {
+    const roleMap = teacherRoleMap();
     const teachers = allTeachers();
-    return `<datalist id="teacher-suggestions">${teachers.map((t) => `<option value="${escapeHtml(t)}"></option>`).join('')}</datalist>`;
+    return `<datalist id="teacher-suggestions">${teachers.map((t) => {
+      const role = roleMap.get(t);
+      const suffix = role && role !== 'conflict' ? ` (${ROLE_LABEL[role]})` : '';
+      return `<option value="${escapeHtml(t)}" label="${escapeHtml(t + suffix)}"></option>`;
+    }).join('')}</datalist>`;
   }
 
   function renderTimeSelect(name, current, min) {
@@ -716,6 +740,20 @@
     const list = elModalRoot.querySelector(`[data-tag-list="${role}"]`);
     const name = (input.value || '').trim();
     if (!name) return;
+    const knownRole = knownTeacherRole(name);
+    if (knownRole === 'conflict') {
+      showFormError(`老师 ${name} 在现有 Lark 数据里已有多个角色，请先清理`);
+      return;
+    }
+    if (knownRole && knownRole !== role) {
+      showFormError(`老师 ${name} 已绑定为 ${ROLE_LABEL[knownRole]}，不能加入 ${ROLE_LABEL[role]}`);
+      return;
+    }
+    const duplicateRole = ROLE_KEYS.find((key) => key !== role && collectTags(key).includes(name));
+    if (duplicateRole) {
+      showFormError(`老师 ${name} 已在 ${ROLE_LABEL[duplicateRole]}，同一时段不能重复绑定角色`);
+      return;
+    }
     const exists = Array.from(list.querySelectorAll('.tag'))
       .some((tag) => tag.getAttribute('data-name') === name);
     if (!exists) {
@@ -726,6 +764,7 @@
       span.innerHTML = `${escapeHtml(name)} <button type="button" data-remove-tag="${role}" data-name="${escapeHtml(name)}" aria-label="移除 ${escapeHtml(name)}">×</button>`;
       list.appendChild(span);
     }
+    showFormError('');
     input.value = '';
     input.focus();
   }
@@ -746,6 +785,23 @@
     const count = parseInt(form.elements.studentCount.value);
     if (!isFinite(count) || count < 0) {
       throw new Error('时段人数必须是 0 或以上');
+    }
+    const seen = new Map();
+    for (const role of ROLE_KEYS) {
+      for (const name of collectTags(role)) {
+        const knownRole = knownTeacherRole(name);
+        if (knownRole === 'conflict') {
+          throw new Error(`老师 ${name} 在现有 Lark 数据里已有多个角色，请先清理`);
+        }
+        if (knownRole && knownRole !== role) {
+          throw new Error(`老师 ${name} 已绑定为 ${ROLE_LABEL[knownRole]}，不能写入 ${ROLE_LABEL[role]}`);
+        }
+        const prev = seen.get(name);
+        if (prev && prev !== role) {
+          throw new Error(`老师 ${name} 在同一时段里重复绑定了 ${ROLE_LABEL[prev]} 和 ${ROLE_LABEL[role]}`);
+        }
+        seen.set(name, role);
+      }
     }
     return {
       [LARK_FIELDS.day]: form.elements.day.value,
