@@ -291,7 +291,26 @@
     }));
   }
 
-  function renderBar(rec, idx) {
+  function layoutRecordLanes(records) {
+    const lanes = [];
+    return records
+      .slice()
+      .sort((a, b) => ((a.startMinutes ?? 99999) - (b.startMinutes ?? 99999)) || ((a.endMinutes ?? 99999) - (b.endMinutes ?? 99999)))
+      .map((rec) => {
+        const start = rec.startMinutes ?? 0;
+        const end = rec.endMinutes ?? start;
+        let lane = lanes.findIndex((laneEnd) => start >= laneEnd);
+        if (lane === -1) {
+          lane = lanes.length;
+          lanes.push(end);
+        } else {
+          lanes[lane] = end;
+        }
+        return { rec, lane };
+      });
+  }
+
+  function renderBar(rec, idx, lane) {
     if (rec.startMinutes == null || rec.endMinutes == null || rec.endMinutes <= rec.startMinutes) return '';
     const start = Math.max(rec.startMinutes, AXIS_START);
     const end = Math.min(rec.endMinutes, AXIS_END);
@@ -305,7 +324,7 @@
     const block = shortBlock(rec.block) || rec.block;
 
     return `<div class="bar ${status.kind}" data-idx="${idx}"
-      style="left: calc(${left} * var(--minute-w)); width: calc(${width} * var(--minute-w));"
+      style="left: calc(${left} * var(--minute-w)); width: calc(${width} * var(--minute-w)); top: ${4 + lane * 52}px; bottom: auto; height: 48px;"
       title="${escapeHtml(rec.day)} ${escapeHtml(rec.block)} ${escapeHtml(rec.timeRange)}">
       <div class="b1">${escapeHtml(block)}</div>
       <div class="b2">${escapeHtml(rec.studentCount + '人')}</div>
@@ -330,9 +349,12 @@
       labelsHtml.push(`<div class="day-header">${escapeHtml(dayLabel)} · ${escapeHtml(grp.day)}</div>`);
       rowsHtml.push('<div class="day-divider"></div>');
       for (const [block, recs] of grp.blocks) {
-        labelsHtml.push(`<div class="row-label">${escapeHtml(shortBlock(block))}</div>`);
-        const bars = recs.map((rec) => renderBar(rec, indexMap.get(rec))).join('');
-        rowsHtml.push(`<div class="row">${bars}</div>`);
+        const laneItems = layoutRecordLanes(recs);
+        const laneCount = Math.max(1, ...laneItems.map((it) => it.lane + 1));
+        const rowHeight = Math.max(56, laneCount * 52 + 4);
+        labelsHtml.push(`<div class="row-label" style="height:${rowHeight}px">${escapeHtml(shortBlock(block))}</div>`);
+        const bars = laneItems.map(({ rec, lane }) => renderBar(rec, indexMap.get(rec), lane)).join('');
+        rowsHtml.push(`<div class="row" style="height:${rowHeight}px">${bars}</div>`);
       }
     }
 
