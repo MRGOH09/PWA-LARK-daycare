@@ -1194,3 +1194,142 @@ switchView(view)
 * Table allows horizontal scrolling
 * Heatmap collapses label column to ~100px on narrow screens
 * Detail modal max-width 560px, max-height 85vh, scrollable
+
+---
+
+# Current Progress — 2026-05-04
+
+Latest shipped commits:
+
+```text
+758a1fa Replace teacher datalist with custom suggestions
+d819659 Use selects for schedule block and day
+d48920c Remove block datalist popup
+85ed0a4 Stack overlapping schedule bars
+f9173c4 Clarify Lark write permission errors
+f94b649 Enforce teacher role bindings on schedule edits
+feaab64 Add public schedule editing CRUD
+29a636d Split 警戒线 into separate teacher and manpower thresholds
+```
+
+## V1.1 Editing Layer
+
+Editing mode is public. Anyone with the URL can currently edit.
+
+Implemented:
+
+* Create schedule slot
+* Update schedule slot
+* Delete schedule slot
+* Edit day, block, start/end time, student count, and four role fields
+* Save to Lark through Python serverless API only
+* Refresh schedule after successful create/update/delete
+
+API files:
+
+```text
+api/_lark.py
+api/create-schedule.py
+api/update-schedule.py
+api/delete-schedule.py
+api/schedule.py
+```
+
+Frontend entry points:
+
+```text
+新增时段 button
+Gantt bar detail -> 编辑
+```
+
+## Edit Form Rules
+
+Day:
+
+* Select only
+* Saves back to Lark as `1.MON`, `2.TUE`, etc.
+
+BLOCK:
+
+* Select only
+* Options are derived from existing Lark records
+* Do not use free text or browser `datalist` for BLOCK
+
+Time:
+
+* Two selects: start and end
+* 30-minute interval
+* End time must be later than start time
+* Saved as `HH:MM-HH:MM`
+
+Teachers:
+
+* Four role fields stay separate: DAYCARE老师, 教书老师, 助理, 助教
+* Browser native `datalist` was removed because it produced ugly white popups
+* Use custom dark suggestion menu instead
+* Suggestions are filtered by role
+* New teacher names can still be typed manually
+
+## Teacher Role Binding
+
+Important business rule:
+
+```text
+One teacher name must belong to one role only.
+```
+
+This is enforced in both frontend and backend.
+
+Frontend:
+
+* A teacher already bound to DAYCARE cannot be added as 助理/助教/教书
+* Same teacher cannot be added to multiple roles in the same slot
+* Custom suggestions show only teachers compatible with that role
+
+Backend:
+
+* `validate_teacher_role_bindings()` scans current Lark records before create/update
+* If a teacher is already bound to another role, update/create is rejected
+* If existing Lark data already has a teacher in multiple roles, the API rejects and asks to clean Lark data first
+
+## Gantt Rendering Fix
+
+Overlapping time slots inside the same day + BLOCK are now stacked into lanes.
+
+Reason:
+
+* HM BLOCK A can have newly added time ranges overlapping existing ranges
+* Old rendering placed every bar in one row, so a new bar could be hidden behind another bar
+
+Current behavior:
+
+* `layoutRecordLanes()` assigns overlapping records to separate vertical lanes
+* Row height expands automatically
+
+## Lark Permission Notes
+
+Read-only schedule loading works with read access.
+
+Create/update/delete require Lark write permissions.
+
+Observed failure:
+
+```text
+403 Client Error: Forbidden for Lark records/{record_id}
+```
+
+Meaning:
+
+* App can read the Base but Lark refuses write/delete
+* Need Lark Open Platform scope such as `bitable:app`
+* After adding scope, app must be published/re-authorized
+* Target Base/Table must also allow this app to edit, not only view
+
+The API now converts 403 into a clearer Chinese error message.
+
+## Remaining Risks / Next Steps
+
+* Current editing mode is fully public; add PIN or Lark OAuth before wider sharing.
+* Confirm Vercel deployment after every push. Local Vercel CLI can fail when project directory name contains Chinese characters.
+* If users report stale UI, force refresh because service worker/static asset cache may keep old JS.
+* Consider adding a small `/api/debug-permissions` endpoint only for admin debugging if Lark permission issues continue.
