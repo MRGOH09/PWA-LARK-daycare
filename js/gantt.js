@@ -4,7 +4,8 @@
   const AXIS_START = 420;
   const AXIS_END = 1320;
   const AUTO_REFRESH_MS = 30 * 1000;
-  const DEFAULT_THRESHOLD = 30;
+  const DEFAULT_TEACHER_THRESHOLD = 30;
+  const DEFAULT_MANPOWER_THRESHOLD = 15;
   const DAY_LABELS = {
     1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU',
     5: 'FRI', 6: 'SAT', 7: 'SUN'
@@ -26,7 +27,8 @@
   const state = {
     records: [],
     updatedAt: null,
-    threshold: DEFAULT_THRESHOLD,
+    teacherThreshold: DEFAULT_TEACHER_THRESHOLD,
+    manpowerThreshold: DEFAULT_MANPOWER_THRESHOLD,
     filters: { day: '', block: '', role: '', teacher: '', status: '' },
     view: 'gantt',
     teacherSort: { key: 'hours', dir: 'desc' },
@@ -42,7 +44,8 @@
   const elRole = $('#filter-role');
   const elTeacher = $('#filter-teacher');
   const elStatus = $('#filter-status');
-  const elThreshold = $('#threshold');
+  const elThresholdTeacher = $('#threshold-teacher');
+  const elThresholdManpower = $('#threshold-manpower');
   const elRefresh = $('#refresh');
   const elReset = $('#reset');
   const elGantt = $('#gantt-root');
@@ -93,7 +96,9 @@
     return { teacherCount, manpowerCount, teacherRatio, manpowerRatio };
   }
 
-  function getRecordStatus(rec, threshold) {
+  function getRecordStatus(rec) {
+    const tT = state.teacherThreshold;
+    const mT = state.manpowerThreshold;
     const r = calculateRatios(rec);
     if (rec.studentCount === 0) {
       return { kind: 'no-student', label: '无学生', detail: '无学生', ...r };
@@ -104,10 +109,10 @@
     if (r.teacherCount === 0) {
       return { kind: 'crisis', label: '危机', detail: '危机：没有正式老师', ...r };
     }
-    if (r.teacherRatio > threshold || r.manpowerRatio > threshold) {
+    if (r.teacherRatio > tT || r.manpowerRatio > mT) {
       return { kind: 'overloaded', label: '超标', detail: '超标', ...r };
     }
-    if (r.teacherRatio >= threshold * 0.8 || r.manpowerRatio >= threshold * 0.8) {
+    if (r.teacherRatio >= tT * 0.8 || r.manpowerRatio >= mT * 0.8) {
       return { kind: 'warning', label: '警戒', detail: '警戒', ...r };
     }
     return { kind: 'normal', label: '正常', detail: '正常', ...r };
@@ -137,7 +142,7 @@
       }
       if (!f.role && f.teacher && !recordHasTeacher(rec, '', f.teacher)) return false;
       if (f.status) {
-        const s = getRecordStatus(rec, state.threshold);
+        const s = getRecordStatus(rec);
         if (s.kind !== f.status) return false;
       }
       return true;
@@ -175,7 +180,7 @@
     let crisis = 0, overloaded = 0, warning = 0, noStudent = 0;
     let maxTeacherRatio = 0, maxManpowerRatio = 0;
     for (const rec of filtered) {
-      const s = getRecordStatus(rec, state.threshold);
+      const s = getRecordStatus(rec);
       if (s.kind === 'crisis') crisis++;
       else if (s.kind === 'overloaded') overloaded++;
       else if (s.kind === 'warning') warning++;
@@ -236,7 +241,7 @@
     if (end <= start) return '';
     const left = start - AXIS_START;
     const width = end - start;
-    const status = getRecordStatus(rec, state.threshold);
+    const status = getRecordStatus(rec);
 
     const teacherStr = status.teacherCount > 0 ? `T ${fmtRatio(status.teacherRatio)}:1` : 'T 无老师';
     const manpowerStr = status.manpowerCount > 0 ? `M ${fmtRatio(status.manpowerRatio)}:1` : 'M 无人手';
@@ -476,7 +481,7 @@
   ============================================================ */
 
   function openSlotDetail(rec) {
-    const s = getRecordStatus(rec, state.threshold);
+    const s = getRecordStatus(rec);
     const teacherLink = (name) => `<span class="teacher-link" data-teacher="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
     const dash = (arr) => (arr && arr.length)
       ? arr.map(teacherLink).join('、')
@@ -668,9 +673,14 @@
     elRole.addEventListener('change', () => { state.filters.role = elRole.value; rerender(); });
     elTeacher.addEventListener('change', () => { state.filters.teacher = elTeacher.value; rerender(); });
     elStatus.addEventListener('change', () => { state.filters.status = elStatus.value; rerender(); });
-    elThreshold.addEventListener('input', () => {
-      const v = parseFloat(elThreshold.value);
-      state.threshold = isFinite(v) && v > 0 ? v : DEFAULT_THRESHOLD;
+    elThresholdTeacher.addEventListener('input', () => {
+      const v = parseFloat(elThresholdTeacher.value);
+      state.teacherThreshold = isFinite(v) && v > 0 ? v : DEFAULT_TEACHER_THRESHOLD;
+      rerender();
+    });
+    elThresholdManpower.addEventListener('input', () => {
+      const v = parseFloat(elThresholdManpower.value);
+      state.manpowerThreshold = isFinite(v) && v > 0 ? v : DEFAULT_MANPOWER_THRESHOLD;
       rerender();
     });
     elRefresh.addEventListener('click', () => loadSchedule(false));

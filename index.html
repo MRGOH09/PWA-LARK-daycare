@@ -549,8 +549,11 @@
       <option value="no-student">无学生</option>
     </select>
   </label>
-  <label data-view-only="gantt">警戒线
-    <input type="number" id="threshold" value="30" min="1" step="1" />
+  <label data-view-only="gantt">老师警戒线
+    <input type="number" id="threshold-teacher" value="30" min="1" step="1" />
+  </label>
+  <label data-view-only="gantt">人手警戒线
+    <input type="number" id="threshold-manpower" value="15" min="1" step="1" />
   </label>
   <span class="spacer"></span>
   <button id="reset" class="secondary" type="button">重置筛选</button>
