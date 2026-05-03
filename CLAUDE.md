@@ -1027,3 +1027,170 @@ DAYCARE老师
 正常
 无学生
 ```
+
+---
+
+# 26. Teachers Workload View (V1.1)
+
+A second top-level view for understanding per-teacher workload.
+
+## Goal
+
+Help internal staff answer:
+
+* Who works the most / least this week
+* What does a single teacher's week look like
+* How is workload distributed across roles
+* Which days are over- or under-staffed by a particular person
+
+## Top Tabs
+
+A tab bar sits between the page header and the filter bar.
+
+```text
+[ 周排班 Gantt ]   [ 老师工作量 ]
+```
+
+Switching tabs does not reload data — it only changes which view renders.
+
+## Shared Filters
+
+The same top filter row applies to both views.
+
+When in the Teachers view:
+
+* `星期` / `BLOCK` / `角色` / `老师` filters reduce the record set
+  *before* aggregation. So choosing `星期 = 1.MON` shows everyone's
+  Monday workload only.
+* `状态` and `警戒线` are Gantt-only and may be hidden in the
+  Teachers view (use `data-view-only="gantt"` markers).
+
+## Role Assumption
+
+A teacher belongs to **one** role across all their slots
+(no overlap). When multiple roles are detected for the same person,
+fall back to the first role encountered as the primary role.
+
+## Per-Teacher Metrics
+
+For each teacher, compute over the filtered record set:
+
+```text
+slots               每老师的时段数
+hours               总工时（小时）= Σ (endMinutes - startMinutes) / 60
+studentHours        生·时（总）   = Σ studentCount × hours
+sharedStudentHours  生·时（分摊） = Σ (studentCount / manpowerInSlot) × hours
+avgStudents         平均带生      = studentHours / hours
+byDay               { dayOrder: hours } — 用于热力图
+```
+
+`manpowerInSlot` is the total of all four role lists in that slot.
+
+## Components
+
+### A. Summary Cards
+
+```text
+老师总数
+DAYCARE 老师
+教书老师
+助理
+助教
+总工时
+人均工时
+总时段数
+```
+
+### B. Leaderboard Table
+
+Columns:
+
+```text
+老师 | 角色 | 时段数 | 总工时(h) | 平均带生 | 生·时(分摊) | 生·时(总) | 工时占比
+```
+
+Behavior:
+
+* Click any column header to sort. Default `hours` desc.
+* Numeric columns default desc, name/role default asc.
+* The 工时占比 column is a horizontal bar tinted by the
+  teacher's role color (`var(--role-{role})`).
+* Click any row to open the teacher detail modal.
+
+### C. Heatmap
+
+Grid of `老师 × 星期`, intensity = hours that day.
+
+```text
+        MON  TUE  WED  THU  FRI  SAT  SUN  总
+Quinn   3h   .    2h   1h   3h   .    .    9h
+Ling    .    4h   .    2h   .    3h   .    9h
+```
+
+Coloring:
+
+* Empty cell uses `--panel-2`
+* Filled cells use `rgba(56,189,248, intensity)` where
+  `intensity = clamp(0.15 + 0.85 × hours/maxDayHours, 0, 0.95)`
+* Click a teacher name in the first column to open detail.
+
+### D. Teacher Detail Modal
+
+Opened by clicking a teacher row or heatmap name.
+
+Contents:
+
+```text
+姓名 + 角色 pill
+
+时段数
+总工时
+平均带生
+生·时 (分摊)
+生·时 (总)
+
+本周时间表 — mini Gantt: one short track per day,
+            colored bars for each slot the teacher is in
+
+所有时段（N） — list of all slots:
+  礼拜 · BLOCK · 时间段 · 学生数
+```
+
+## Cross-Linking from Gantt
+
+In the slot detail modal (Gantt view), every teacher name
+becomes a clickable link.
+
+Clicking it must:
+
+1. Close the slot modal
+2. Switch to the Teachers view (call `switchView('teachers')`)
+3. Open that teacher's detail modal
+
+## Role Colors
+
+```text
+DAYCARE         #38bdf8   --role-daycare
+教书            #a78bfa   --role-teaching
+助理            #fbbf24   --role-assistant
+助教            #34d399   --role-assistantTeacher
+```
+
+## Suggested Frontend Functions
+
+```js
+computeTeacherStats(records)
+sortTeacherStats(list)
+renderTeachersSummary(stats, filtered)
+renderTeachersTable(stats)
+renderTeachersHeatmap(stats)
+renderTeachersView(filtered)
+openTeacherDetail(name, statsList)
+switchView(view)
+```
+
+## Mobile
+
+* Table allows horizontal scrolling
+* Heatmap collapses label column to ~100px on narrow screens
+* Detail modal max-width 560px, max-height 85vh, scrollable
