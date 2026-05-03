@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f172a" />
+<title>一周人力 Gantt Dashboard</title>
+<link rel="manifest" href="/manifest.json" />
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+
+    --status-normal: #16a34a;
+    --status-warning: #f59e0b;
+    --status-overloaded: #dc2626;
+    --status-crisis: #7f1d1d;
+    --status-no-student: #64748b;
+
+    --label-col-w: 160px;
+    --minute-w: 1.4px;
+    --hour-w: calc(var(--minute-w) * 60);
+    --row-h: 56px;
+    --axis-h: 32px;
+    --axis-start: 420;
+    --axis-end: 1320;
+    --axis-span: 900;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  header.top {
+    padding: 16px 20px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  header.top h1 { margin: 0; font-size: 20px; }
+  header.top p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  header.top .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  .filters label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--muted);
+    gap: 4px;
+  }
+  .filters select,
+  .filters input[type="number"] {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    min-width: 110px;
+  }
+  .filters input[type="number"] { width: 90px; min-width: 0; }
+  .filters .spacer { flex: 1; }
+  .filters button {
+    background: var(--accent);
+    color: #0b1220;
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .filters button.secondary {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    padding: 12px 20px;
+  }
+  .summary .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .summary .card .label { font-size: 11px; color: var(--muted); }
+  .summary .card .value { font-size: 22px; font-weight: 700; margin-top: 2px; }
+  .summary .card.crisis .value { color: var(--status-crisis); }
+  .summary .card.overloaded .value { color: var(--status-overloaded); }
+  .summary .card.warning .value { color: var(--status-warning); }
+  .summary .card.no-student .value { color: var(--status-no-student); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 0 20px 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .legend .dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  .gantt-wrapper {
+    padding: 0 12px 24px;
+  }
+  .gantt {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: var(--label-col-w) 1fr;
+  }
+
+  .gantt-labels {
+    border-right: 1px solid var(--border);
+    background: var(--panel-2);
+    overflow: hidden;
+  }
+  .gantt-labels .axis-spacer { height: var(--axis-h); border-bottom: 1px solid var(--border); }
+  .gantt-labels .day-header {
+    height: 28px;
+    line-height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    background: rgba(56,189,248,0.08);
+    border-bottom: 1px solid var(--border);
+  }
+  .gantt-labels .row-label {
+    height: var(--row-h);
+    padding: 8px 12px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+  }
+
+  .gantt-timeline-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .gantt-timeline {
+    width: calc(var(--axis-span) * var(--minute-w));
+    min-width: 100%;
+  }
+
+  .axis {
+    height: var(--axis-h);
+    position: relative;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .axis .tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--border);
+    padding: 6px 4px 0;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .day-divider {
+    height: 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(56,189,248,0.04);
+  }
+
+  .row {
+    position: relative;
+    height: var(--row-h);
+    border-bottom: 1px solid var(--border);
+    background-image: linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: var(--hour-w) 100%;
+  }
+
+  .bar {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    border-radius: 4px;
+    padding: 4px 6px;
+    color: #fff;
+    font-size: 11px;
+    line-height: 1.25;
+    cursor: pointer;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.25);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: transform 0.08s ease;
+  }
+  .bar:hover { transform: translateY(-1px); }
+  .bar .b1 { font-weight: 700; }
+  .bar .b2 { opacity: 0.95; }
+  .bar .b3 { opacity: 0.9; font-size: 10px; }
+
+  .bar.normal      { background: var(--status-normal); }
+  .bar.warning     { background: var(--status-warning); color: #1a1a1a; }
+  .bar.warning .bar-text { color: #1a1a1a; }
+  .bar.overloaded  { background: var(--status-overloaded); }
+  .bar.crisis      { background: var(--status-crisis); }
+  .bar.no-student  { background: var(--status-no-student); }
+
+  .empty-state, .error-state {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .error-state { color: #fca5a5; }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 100%;
+    max-width: 460px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .modal h2 { margin: 0 0 12px; font-size: 16px; }
+  .modal dl { display: grid; grid-template-columns: 110px 1fr; row-gap: 8px; column-gap: 12px; margin: 0; }
+  .modal dt { color: var(--muted); font-size: 13px; }
+  .modal dd { margin: 0; font-size: 13px; word-break: break-word; }
+  .modal .status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .modal .status-pill.warning { color: #1a1a1a; }
+  .modal .actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+  .modal .actions button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+
+  @media (max-width: 640px) {
+    :root {
+      --label-col-w: 110px;
+      --row-h: 60px;
+      --minute-w: 1.6px;
+    }
+    header.top { padding: 12px 14px 6px; }
+    .filters { padding: 10px 14px; }
+    .summary { padding: 10px 14px; }
+    .legend { padding: 0 14px 8px; }
+    .gantt-wrapper { padding: 0 8px 20px; }
+    .filters select, .filters input[type="number"] { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>一周人力覆盖 Gantt Dashboard</h1>
+  <p>查看每个时段的学生人数、老师安排与人手比例</p>
+  <div class="meta" id="meta">加载中…</div>
+</header>
+
+<section class="filters">
+  <label>星期
+    <select id="filter-day"><option value="">全部</option></select>
+  </label>
+  <label>BLOCK
+    <select id="filter-block"><option value="">全部</option></select>
+  </label>
+  <label>角色
+    <select id="filter-role">
+      <option value="">全部</option>
+      <option value="daycare">DAYCARE老师</option>
+      <option value="teaching">教书老师</option>
+      <option value="assistant">助理</option>
+      <option value="assistantTeacher">助教</option>
+    </select>
+  </label>
+  <label>老师
+    <select id="filter-teacher"><option value="">全部</option></select>
+  </label>
+  <label>状态
+    <select id="filter-status">
+      <option value="">全部</option>
+      <option value="normal">正常</option>
+      <option value="warning">警戒</option>
+      <option value="overloaded">超标</option>
+      <option value="crisis">危机</option>
+      <option value="no-student">无学生</option>
+    </select>
+  </label>
+  <label>警戒线
+    <input type="number" id="threshold" value="30" min="1" step="1" />
+  </label>
+  <span class="spacer"></span>
+  <button id="reset" class="secondary" type="button">重置筛选</button>
+  <button id="refresh" type="button">刷新</button>
+</section>
+
+<section class="summary" id="summary"></section>
+
+<div class="legend">
+  <span><span class="dot" style="background: var(--status-normal)"></span>正常</span>
+  <span><span class="dot" style="background: var(--status-warning)"></span>警戒</span>
+  <span><span class="dot" style="background: var(--status-overloaded)"></span>超标</span>
+  <span><span class="dot" style="background: var(--status-crisis)"></span>危机</span>
+  <span><span class="dot" style="background: var(--status-no-student)"></span>无学生</span>
+</div>
+
+<section class="gantt-wrapper">
+  <div id="gantt-root">
+    <div class="empty-state">加载数据中…</div>
+  </div>
+</section>
+
+<div id="modal-root"></div>
+
+<script src="/js/gantt.js" defer></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
+</script>
+
+</body>
+</html>

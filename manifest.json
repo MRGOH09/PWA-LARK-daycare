@@ -1,0 +1,20 @@
+{
+  "name": "一周人力 Gantt Dashboard",
+  "short_name": "Gantt",
+  "description": "一周人力覆盖与时段人数 Gantt Dashboard",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "zh",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230f172a'/><text x='50%25' y='58%25' font-family='Arial' font-size='96' fill='white' text-anchor='middle'>G</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

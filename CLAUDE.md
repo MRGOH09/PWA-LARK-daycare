@@ -1,0 +1,1029 @@
+# CLAUDE.md
+
+## Project Name
+
+Weekly Manpower Gantt Dashboard
+
+## Project Goal
+
+Build a Vercel-hosted web dashboard that reads schedule/manpower data from Lark Base and displays a weekly Gantt chart for internal teachers.
+
+The dashboard helps staff understand:
+
+- How many students are in each time block
+- Which teachers / assistants are assigned
+- Teacher-to-student ratio
+- Total manpower-to-student ratio
+- Which time slots are normal, warning, overloaded, crisis, or no-student slots
+
+This project is similar in deployment style to the existing Vercel + Python Serverless + Lark Base REST API project structure, where static frontend files are served by Vercel and Python API routes read data from Lark Base.
+
+---
+
+# 1. Technical Stack
+
+Use a simple Vercel project structure.
+
+Do not use React unless explicitly requested.
+
+Use:
+
+- HTML
+- CSS
+- Vanilla JavaScript
+- Python Serverless Functions on Vercel
+- Lark Base REST API
+- `requests` Python library only
+
+Expected structure:
+
+```text
+/
+├── index.html
+├── manifest.json
+├── sw.js
+├── requirements.txt
+├── api/
+│   └── schedule.py
+└── js/
+    └── gantt.js
+```
+
+Future editable version may add:
+
+```text
+api/update-schedule.py
+api/create-schedule.py
+api/delete-schedule.py
+```
+
+---
+
+# 2. Deployment Platform
+
+Deploy on Vercel.
+
+Use Vercel Python Serverless Functions.
+
+Each Python API file must expose a `handler` class that inherits from:
+
+```python
+from http.server import BaseHTTPRequestHandler
+```
+
+The project may not need `vercel.json` unless required.
+
+---
+
+# 3. Environment Variables
+
+Use these Vercel environment variables:
+
+```text
+LARK_APP_ID
+LARK_APP_SECRET
+LARK_BASE_TOKEN
+LARK_TABLE_ID
+```
+
+`LARK_BASE_TOKEN` is the Lark Base app token.
+
+`LARK_TABLE_ID` is the target table ID.
+
+Do not hardcode credentials in source files.
+
+---
+
+# 4. Lark API Flow
+
+The backend API should:
+
+1. Read environment variables
+2. Request Lark tenant access token
+3. Read records from Lark Base
+4. Normalize Lark field values into clean JSON
+5. Return JSON to frontend
+
+Lark token endpoint:
+
+```text
+POST https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal
+```
+
+Lark records endpoint:
+
+```text
+GET https://open.larksuite.com/open-apis/bitable/v1/apps/{base_token}/tables/{table_id}/records
+```
+
+Use:
+
+```http
+Authorization: Bearer <tenant_access_token>
+```
+
+The records API must support pagination.
+
+Use `page_size=500` and loop with `page_token` until all records are retrieved.
+
+---
+
+# 5. Lark Base Fields
+
+The current Lark Base table contains these fields:
+
+```text
+礼拜几
+BLOCK
+时段人数
+时间段
+DAYCARE老师
+教书老师
+助理
+助教
+```
+
+Optional future fields:
+
+```text
+校区
+备注
+```
+
+Every row represents one schedule time block.
+
+Example:
+
+```text
+1.MON + HM BLOCK A + 7:30–9:30
+1.MON + HM BLOCK B + 7:30–9:30
+2.TUE + HM BLOCK A + 9:30–11:00
+```
+
+---
+
+# 6. Weekly Template
+
+The week is fixed.
+
+The dashboard does not need real dates.
+
+Valid weekday values:
+
+```text
+1.MON
+2.TUE
+3.WED
+4.THU
+5.FRI
+6.SAT
+7.SUN
+```
+
+Create a `dayOrder` value from these labels.
+
+Example:
+
+```js
+"1.MON" -> 1
+"2.TUE" -> 2
+```
+
+---
+
+# 7. Time Axis
+
+The Gantt chart time axis is fixed:
+
+```text
+7:00AM to 10:00PM
+```
+
+In 24-hour format:
+
+```text
+07:00–22:00
+```
+
+Convert times into minutes from midnight.
+
+Examples:
+
+```text
+7:00AM = 420
+7:30AM = 450
+10:00PM = 1320
+```
+
+The time parser must handle these formats:
+
+```text
+7:30–9:30
+3. 9:30AM–11:00AM
+4. 11:00AM–12:30PM
+5. 12:30PM–14:00PM
+14:00–15:30
+17:00–18:30
+19:00–20:30
+```
+
+Important parsing rules:
+
+* Remove leading numbering such as `3.`, `4.`, `5.`
+* Support `–`, `—`, and `-` as separators
+* Support AM / PM
+* Support 24-hour format
+* Treat invalid time ranges safely and do not break the page
+
+---
+
+# 8. API Output Format
+
+`GET /api/schedule` should return:
+
+```json
+{
+  "success": true,
+  "updatedAt": "2026-05-03T22:00:00+08:00",
+  "records": [
+    {
+      "recordId": "recxxxx",
+      "day": "1.MON",
+      "dayOrder": 1,
+      "block": "HM BLOCK A",
+      "studentCount": 33,
+      "timeRange": "7:30–9:30",
+      "startMinutes": 450,
+      "endMinutes": 570,
+      "daycareTeachers": ["Quinn"],
+      "teachingTeachers": [],
+      "assistants": ["助理玮瑄（Until 5月）"],
+      "assistantTeachers": []
+    }
+  ]
+}
+```
+
+The frontend should calculate ratios and status because the warning threshold is adjustable on the webpage.
+
+Always include `recordId` for future editing.
+
+---
+
+# 9. Field Normalization Rules
+
+Lark field values may come in different shapes.
+
+Create helper functions to extract values safely.
+
+Handle:
+
+## Text / single select
+
+```json
+{"text": "Quinn"}
+```
+
+Return:
+
+```text
+Quinn
+```
+
+## Number
+
+```json
+33
+```
+
+Return number.
+
+## Multi-select / people-like fields
+
+```json
+[
+  {"text": "Quinn"},
+  {"text": "Ling"}
+]
+```
+
+Return:
+
+```json
+["Quinn", "Ling"]
+```
+
+## Empty fields
+
+Return:
+
+```json
+[]
+```
+
+for teacher lists.
+
+Return:
+
+```text
+""
+```
+
+for string fields.
+
+Return:
+
+```text
+0
+```
+
+for student count.
+
+Do not crash if a field is missing.
+
+---
+
+# 10. Gantt Chart Layout
+
+The chart should show:
+
+* Horizontal axis: time
+* Vertical axis: week
+
+Preferred default layout:
+
+```text
+MON
+  HM BLOCK A
+  HM BLOCK B
+  PU
+
+TUE
+  HM BLOCK A
+  HM BLOCK B
+  PU
+```
+
+This is clearer than putting all blocks into one weekday row.
+
+Each bar represents one Lark Base row.
+
+Bar position:
+
+```text
+left = startMinutes - axisStartMinutes
+width = endMinutes - startMinutes
+```
+
+Axis start:
+
+```text
+420
+```
+
+Axis end:
+
+```text
+1320
+```
+
+---
+
+# 11. Bar Content
+
+Inside each Gantt bar, show compact information:
+
+```text
+HM A
+33人
+T 33:1 / M 16.5:1
+```
+
+Where:
+
+```text
+T = Teacher Ratio
+M = Manpower Ratio
+```
+
+On click, open detail panel or modal showing:
+
+```text
+礼拜：1.MON
+Block：HM BLOCK A
+时间：7:30–9:30
+人数：33
+
+DAYCARE老师：Quinn
+教书老师：-
+助理：助理玮瑄
+助教：-
+
+老师学生比：33:1
+人手学生比：16.5:1
+
+状态：超标
+```
+
+---
+
+# 12. Ratio Calculation
+
+There are two ratios.
+
+## Teacher Ratio
+
+Only count:
+
+```text
+DAYCARE老师 + 教书老师
+```
+
+Formula:
+
+```text
+studentCount / teacherCount
+```
+
+Where:
+
+```text
+teacherCount = daycareTeachers.length + teachingTeachers.length
+```
+
+## Manpower Ratio
+
+Count all manpower:
+
+```text
+DAYCARE老师 + 教书老师 + 助理 + 助教
+```
+
+Formula:
+
+```text
+studentCount / manpowerCount
+```
+
+Where:
+
+```text
+manpowerCount =
+  daycareTeachers.length
+  + teachingTeachers.length
+  + assistants.length
+  + assistantTeachers.length
+```
+
+Every person counts as 1.
+
+Do not use 0.5 weighting.
+
+---
+
+# 13. Warning Threshold
+
+First version should have one adjustable threshold input on the webpage.
+
+Example:
+
+```text
+警戒线：30
+```
+
+Use the same threshold for both:
+
+```text
+teacherRatio
+manpowerRatio
+```
+
+Later, this can be moved to a Lark Base settings table.
+
+Do not hardcode permanently.
+
+Default threshold can be:
+
+```text
+30
+```
+
+---
+
+# 14. Status Logic
+
+Each record should be classified into one of these states:
+
+```text
+crisis
+overloaded
+warning
+normal
+no-student
+```
+
+Display Chinese labels:
+
+```text
+危机
+超标
+警戒
+正常
+无学生
+```
+
+## No Student
+
+If:
+
+```text
+studentCount === 0
+```
+
+Status:
+
+```text
+无学生
+```
+
+Show grey.
+
+Do not hide it.
+
+## Crisis
+
+Crisis has highest priority after no-student check.
+
+If:
+
+```text
+studentCount > 0
+and teacherCount === 0
+```
+
+Status:
+
+```text
+危机：没有正式老师
+```
+
+If:
+
+```text
+studentCount > 0
+and manpowerCount === 0
+```
+
+Status:
+
+```text
+危机：没有任何人手
+```
+
+Use dark red.
+
+## Overloaded
+
+If:
+
+```text
+teacherRatio > threshold
+or manpowerRatio > threshold
+```
+
+Status:
+
+```text
+超标
+```
+
+Use red.
+
+## Warning
+
+If:
+
+```text
+teacherRatio >= threshold * 0.8
+or manpowerRatio >= threshold * 0.8
+```
+
+Status:
+
+```text
+警戒
+```
+
+Use yellow / orange.
+
+## Normal
+
+Otherwise:
+
+```text
+正常
+```
+
+Use green.
+
+---
+
+# 15. Filters
+
+The dashboard must support multi-dimensional filters.
+
+Required filters:
+
+```text
+星期
+BLOCK
+老师
+角色
+人数状态
+校区
+```
+
+`校区` is optional for now and should be hidden or disabled if no campus data exists.
+
+## Weekday Filter
+
+```text
+全部
+1.MON
+2.TUE
+3.WED
+4.THU
+5.FRI
+6.SAT
+7.SUN
+```
+
+## Block Filter
+
+Examples:
+
+```text
+全部
+HM BLOCK A
+HM BLOCK B
+PU
+```
+
+Generate options dynamically from data.
+
+## Role Filter
+
+```text
+全部
+DAYCARE老师
+教书老师
+助理
+助教
+```
+
+## Teacher Filter
+
+Generate teacher names dynamically from:
+
+```text
+DAYCARE老师
+教书老师
+助理
+助教
+```
+
+## Teacher Search Logic
+
+If:
+
+```text
+角色 = 全部
+老师 = Quinn
+```
+
+Show records where Quinn appears in any of:
+
+```text
+DAYCARE老师
+教书老师
+助理
+助教
+```
+
+If:
+
+```text
+角色 = DAYCARE老师
+老师 = Quinn
+```
+
+Only show records where Quinn appears in the DAYCARE老师 field.
+
+## Status Filter
+
+```text
+全部
+正常
+警戒
+超标
+危机
+无学生
+```
+
+---
+
+# 16. Dashboard Summary Cards
+
+At the top, show summary cards:
+
+```text
+总时段数
+危机时段数
+超标时段数
+警戒时段数
+无学生时段数
+最高老师学生比
+最高人手学生比
+```
+
+These should update when filters or threshold change.
+
+---
+
+# 17. Responsive Design
+
+The dashboard must work on:
+
+* Desktop
+* Tablet
+* Mobile phone
+
+On mobile:
+
+* Allow horizontal scrolling for the time axis
+* Keep filters accessible
+* Bar content can be more compact
+* Detail modal should be readable
+
+---
+
+# 18. Auto Refresh
+
+Implement auto refresh every 30 seconds.
+
+Use cache-busting:
+
+```js
+fetch('/api/schedule?t=' + Date.now())
+```
+
+Avoid rerendering if data has not changed.
+
+Pause auto refresh when:
+
+* The browser tab is hidden
+* A detail modal is open
+* Later, when editing mode is open
+
+---
+
+# 19. Error Handling
+
+Frontend must handle:
+
+* Lark API error
+* Missing environment variables
+* Empty records
+* Invalid time range
+* Network error
+
+Show clear user-facing messages in Chinese.
+
+Example:
+
+```text
+无法读取 Lark Base 数据，请检查 App 权限、Base Token、Table ID 或字段名称。
+```
+
+Backend should return structured errors:
+
+```json
+{
+  "success": false,
+  "error": "Missing LARK_BASE_TOKEN"
+}
+```
+
+---
+
+# 20. Security
+
+Do not expose:
+
+```text
+LARK_APP_ID
+LARK_APP_SECRET
+tenant_access_token
+```
+
+to frontend.
+
+All Lark API calls must happen in Vercel serverless functions.
+
+Escape all user-generated content before inserting into HTML.
+
+Do not use `innerHTML` with raw Lark data unless escaped.
+
+---
+
+# 21. Future Editable Version
+
+First version is read-only.
+
+However, keep structure ready for editing.
+
+Future requirements:
+
+```text
+A. Edit DAYCARE老师 / 教书老师 / 助理 / 助教
+B. Edit student count
+C. Edit time range
+D. Add new time slot
+E. Delete time slot
+```
+
+Use `recordId` for update and delete.
+
+Future API files:
+
+```text
+api/update-schedule.py
+api/create-schedule.py
+api/delete-schedule.py
+```
+
+Future edit modal should support:
+
+```text
+studentCount
+timeRange
+daycareTeachers
+teachingTeachers
+assistants
+assistantTeachers
+```
+
+---
+
+# 22. Coding Style
+
+Keep code simple and readable.
+
+Use clear function names.
+
+Suggested frontend functions:
+
+```js
+loadSchedule()
+normalizeRecords()
+parseTimeRange()
+calculateRatios()
+getRecordStatus()
+renderFilters()
+applyFilters()
+renderSummary()
+renderGantt()
+renderDetailModal()
+escapeHtml()
+```
+
+Suggested backend functions:
+
+```python
+get_env()
+get_tenant_access_token()
+fetch_all_records()
+extract_text()
+extract_list()
+parse_student_count()
+parse_day_order()
+parse_time_range()
+normalize_record()
+send_json()
+send_error()
+```
+
+---
+
+# 23. Important Implementation Notes
+
+## Do not assume Lark values are always strings.
+
+Many Lark fields may return:
+
+```json
+{"text": "..."}
+```
+
+or:
+
+```json
+[{"text": "..."}]
+```
+
+or raw values.
+
+Write robust extraction helpers.
+
+## Do not skip records with studentCount = 0.
+
+They must appear as grey "无学生" slots.
+
+## Do not merge roles.
+
+DAYCARE老师, 教书老师, 助理, 助教 must stay separate.
+
+Only combine them for ratio calculation.
+
+## Do not use AM / PM display only.
+
+Internally use minutes.
+
+Display original `timeRange` to users.
+
+## Keep Chinese labels in UI.
+
+The main users are internal teachers.
+
+---
+
+# 24. Deliverables for V1
+
+Create:
+
+```text
+index.html
+js/gantt.js
+api/schedule.py
+requirements.txt
+manifest.json
+sw.js
+```
+
+V1 must support:
+
+```text
+Read Lark Base
+Render weekly Gantt
+Filter by week/block/teacher/role/status
+Adjust threshold on webpage
+Calculate teacher ratio
+Calculate manpower ratio
+Show crisis/overloaded/warning/normal/no-student colors
+Show summary cards
+Open detail modal
+Responsive layout
+Auto refresh
+```
+
+Do not implement editing in V1 unless explicitly requested.
+
+---
+
+# 25. UI Language
+
+Use mostly Chinese UI labels.
+
+Recommended title:
+
+```text
+一周人力覆盖 Gantt Dashboard
+```
+
+Recommended subtitle:
+
+```text
+查看每个时段的学生人数、老师安排与人手比例
+```
+
+Use these labels:
+
+```text
+礼拜
+Block
+时段人数
+时间段
+DAYCARE老师
+教书老师
+助理
+助教
+老师学生比
+人手学生比
+状态
+警戒线
+危机
+超标
+警戒
+正常
+无学生
+```
