@@ -22,6 +22,11 @@
     --status-crisis: #7f1d1d;
     --status-no-student: #64748b;
 
+    --role-daycare: #38bdf8;
+    --role-teaching: #a78bfa;
+    --role-assistant: #fbbf24;
+    --role-assistantTeacher: #34d399;
+
     --label-col-w: 160px;
     --minute-w: 1.4px;
     --hour-w: calc(var(--minute-w) * 60);
@@ -49,6 +54,31 @@
   header.top p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
   header.top .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
 
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 20px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .tabs button {
+    background: transparent;
+    color: var(--muted);
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px 6px 0 0;
+  }
+  .tabs button.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(56,189,248,0.06);
+  }
+  .tabs button:hover:not(.active) { color: var(--text); }
+
   .filters {
     display: flex;
     flex-wrap: wrap;
@@ -66,7 +96,8 @@
     gap: 4px;
   }
   .filters select,
-  .filters input[type="number"] {
+  .filters input[type="number"],
+  .filters input[type="search"] {
     background: var(--panel-2);
     color: var(--text);
     border: 1px solid var(--border);
@@ -76,6 +107,7 @@
     min-width: 110px;
   }
   .filters input[type="number"] { width: 90px; min-width: 0; }
+  .filters input[type="search"] { min-width: 160px; }
   .filters .spacer { flex: 1; }
   .filters button {
     background: var(--accent);
@@ -258,8 +290,8 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     width: 100%;
-    max-width: 460px;
-    max-height: 80vh;
+    max-width: 560px;
+    max-height: 85vh;
     overflow-y: auto;
     padding: 20px;
   }
@@ -285,6 +317,177 @@
     padding: 6px 14px;
     cursor: pointer;
   }
+  .teacher-link {
+    cursor: pointer;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .teacher-link:hover { color: #7dd3fc; }
+
+  /* ========== Teachers View ========== */
+  .teachers-wrapper { padding: 0 20px 24px; }
+
+  .teachers-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .panel-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .panel-card h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .teachers-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .teachers-table th, .teachers-table td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .teachers-table th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    user-select: none;
+    background: var(--panel-2);
+    position: sticky;
+    top: 0;
+  }
+  .teachers-table th.sorted { color: var(--accent); }
+  .teachers-table th .arrow { margin-left: 4px; opacity: 0.7; }
+  .teachers-table tbody tr { cursor: pointer; }
+  .teachers-table tbody tr:hover { background: var(--panel-2); }
+  .teachers-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .teachers-table td.bar-cell { width: 200px; }
+  .teachers-table-wrap {
+    overflow-x: auto;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .role-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #0b1220;
+  }
+  .role-pill.daycare           { background: var(--role-daycare); }
+  .role-pill.teaching          { background: var(--role-teaching); }
+  .role-pill.assistant         { background: var(--role-assistant); }
+  .role-pill.assistantTeacher  { background: var(--role-assistantTeacher); }
+
+  .hbar {
+    background: var(--panel-2);
+    border-radius: 4px;
+    height: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hbar > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+  }
+
+  /* Heatmap */
+  .heatmap {
+    display: grid;
+    grid-template-columns: 140px repeat(7, 1fr) 80px;
+    gap: 2px;
+    font-size: 12px;
+    overflow-x: auto;
+  }
+  .heatmap .cell {
+    padding: 6px 8px;
+    text-align: center;
+    background: var(--panel-2);
+    border-radius: 4px;
+    min-height: 28px;
+    line-height: 1.2;
+  }
+  .heatmap .cell.name {
+    text-align: left;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .heatmap .cell.name:hover { color: var(--accent); }
+  .heatmap .cell.head {
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .heatmap .cell.total { font-weight: 700; }
+
+  /* Mini gantt for teacher detail */
+  .mini-gantt {
+    width: 100%;
+    margin-top: 12px;
+  }
+  .mini-gantt .row-mini {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .mini-gantt .row-mini .day-name {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .mini-gantt .track {
+    position: relative;
+    height: 22px;
+    background: var(--panel-2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .mini-gantt .seg {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: var(--accent);
+    border-radius: 3px;
+    color: #0b1220;
+    font-size: 10px;
+    line-height: 22px;
+    padding: 0 4px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .view-section { display: block; }
+  .view-section[hidden] { display: none; }
+
+  @media (max-width: 720px) {
+    .teachers-table th, .teachers-table td { padding: 6px 6px; font-size: 12px; }
+    .teachers-table td.bar-cell { width: 120px; }
+    .heatmap { grid-template-columns: 100px repeat(7, 1fr) 60px; font-size: 11px; }
+    .heatmap .cell { padding: 4px 4px; }
+  }
 
   @media (max-width: 640px) {
     :root {
@@ -293,10 +496,13 @@
       --minute-w: 1.6px;
     }
     header.top { padding: 12px 14px 6px; }
+    .tabs { padding: 6px 14px 0; }
+    .tabs button { padding: 8px 10px; font-size: 12px; }
     .filters { padding: 10px 14px; }
     .summary { padding: 10px 14px; }
     .legend { padding: 0 14px 8px; }
     .gantt-wrapper { padding: 0 8px 20px; }
+    .teachers-wrapper { padding: 0 12px 20px; }
     .filters select, .filters input[type="number"] { font-size: 12px; }
   }
 </style>
@@ -308,6 +514,11 @@
   <p>查看每个时段的学生人数、老师安排与人手比例</p>
   <div class="meta" id="meta">加载中…</div>
 </header>
+
+<nav class="tabs" role="tablist">
+  <button data-view="gantt" class="active" type="button">周排班 Gantt</button>
+  <button data-view="teachers" type="button">老师工作量</button>
+</nav>
 
 <section class="filters">
   <label>星期
@@ -328,7 +539,7 @@
   <label>老师
     <select id="filter-teacher"><option value="">全部</option></select>
   </label>
-  <label>状态
+  <label data-view-only="gantt">状态
     <select id="filter-status">
       <option value="">全部</option>
       <option value="normal">正常</option>
@@ -338,7 +549,7 @@
       <option value="no-student">无学生</option>
     </select>
   </label>
-  <label>警戒线
+  <label data-view-only="gantt">警戒线
     <input type="number" id="threshold" value="30" min="1" step="1" />
   </label>
   <span class="spacer"></span>
@@ -346,21 +557,55 @@
   <button id="refresh" type="button">刷新</button>
 </section>
 
-<section class="summary" id="summary"></section>
+<!-- ========== Gantt View ========== -->
+<div id="view-gantt" class="view-section">
+  <section class="summary" id="summary"></section>
 
-<div class="legend">
-  <span><span class="dot" style="background: var(--status-normal)"></span>正常</span>
-  <span><span class="dot" style="background: var(--status-warning)"></span>警戒</span>
-  <span><span class="dot" style="background: var(--status-overloaded)"></span>超标</span>
-  <span><span class="dot" style="background: var(--status-crisis)"></span>危机</span>
-  <span><span class="dot" style="background: var(--status-no-student)"></span>无学生</span>
+  <div class="legend">
+    <span><span class="dot" style="background: var(--status-normal)"></span>正常</span>
+    <span><span class="dot" style="background: var(--status-warning)"></span>警戒</span>
+    <span><span class="dot" style="background: var(--status-overloaded)"></span>超标</span>
+    <span><span class="dot" style="background: var(--status-crisis)"></span>危机</span>
+    <span><span class="dot" style="background: var(--status-no-student)"></span>无学生</span>
+  </div>
+
+  <section class="gantt-wrapper">
+    <div id="gantt-root">
+      <div class="empty-state">加载数据中…</div>
+    </div>
+  </section>
 </div>
 
-<section class="gantt-wrapper">
-  <div id="gantt-root">
-    <div class="empty-state">加载数据中…</div>
+<!-- ========== Teachers View ========== -->
+<div id="view-teachers" class="view-section" hidden>
+  <section class="summary" id="teachers-summary"></section>
+
+  <div class="legend">
+    <span><span class="dot" style="background: var(--role-daycare)"></span>DAYCARE老师</span>
+    <span><span class="dot" style="background: var(--role-teaching)"></span>教书老师</span>
+    <span><span class="dot" style="background: var(--role-assistant)"></span>助理</span>
+    <span><span class="dot" style="background: var(--role-assistantTeacher)"></span>助教</span>
   </div>
-</section>
+
+  <section class="teachers-wrapper">
+    <div class="teachers-grid">
+      <div class="panel-card">
+        <h3>老师排行（点击表头排序，点行看详情）</h3>
+        <div class="teachers-table-wrap">
+          <table class="teachers-table" id="teachers-table">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <h3>热力图：老师 × 星期（颜色越深 = 工时越多）</h3>
+        <div id="teachers-heatmap"></div>
+      </div>
+    </div>
+  </section>
+</div>
 
 <div id="modal-root"></div>
 
