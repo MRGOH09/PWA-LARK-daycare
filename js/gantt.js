@@ -10,6 +10,7 @@
     1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU',
     5: 'FRI', 6: 'SAT', 7: 'SUN'
   };
+  const DAY_VALUES = [1, 2, 3, 4, 5, 6, 7].map((d) => `${d}.${DAY_LABELS[d]}`);
   const ROLE_KEYS = ['daycare', 'teaching', 'assistant', 'assistantTeacher'];
   const ROLE_FIELD = {
     daycare: 'daycareTeachers',
@@ -191,6 +192,12 @@
     return unique(state.records.map((r) => r.block).filter(Boolean)).sort();
   }
 
+  function blockOptions(current) {
+    const blocks = allBlocks();
+    if (current && !blocks.includes(current)) blocks.push(current);
+    return blocks.sort((a, b) => a.localeCompare(b, 'zh'));
+  }
+
   function timeOptions() {
     const out = [];
     for (let m = AXIS_START; m <= AXIS_END; m += 30) {
@@ -207,7 +214,7 @@
 
   function parseDayOption(day) {
     const n = parseInt(day);
-    return isFinite(n) && n >= 1 && n <= 7 ? String(n) : (day || '1');
+    return isFinite(n) && n >= 1 && n <= 7 ? `${n}.${DAY_LABELS[n]}` : (day || '1.MON');
   }
 
   function populateFilterOptions() {
@@ -611,7 +618,7 @@
   }
 
   function defaultNewRecord() {
-    const day = state.filters.day || '1';
+    const day = state.filters.day || '1.MON';
     const block = state.filters.block || (allBlocks()[0] || '');
     return {
       recordId: '',
@@ -629,14 +636,17 @@
     };
   }
 
-  function renderTeacherDatalist() {
+  function compatibleTeachers(role) {
     const roleMap = teacherRoleMap();
-    const teachers = allTeachers();
-    return `<datalist id="teacher-suggestions">${teachers.map((t) => {
-      const role = roleMap.get(t);
-      const suffix = role && role !== 'conflict' ? ` (${ROLE_LABEL[role]})` : '';
-      return `<option value="${escapeHtml(t)}" label="${escapeHtml(t + suffix)}"></option>`;
-    }).join('')}</datalist>`;
+    return allTeachers().filter((name) => roleMap.get(name) === role);
+  }
+
+  function renderTeacherDatalists() {
+    return ROLE_KEYS.map((role) => `
+      <datalist id="teacher-suggestions-${role}">
+        ${compatibleTeachers(role).map((name) => `<option value="${escapeHtml(name)}"></option>`).join('')}
+      </datalist>
+    `).join('');
   }
 
   function renderTimeSelect(name, current, min) {
@@ -659,7 +669,7 @@
         <div class="tag-field-title">${escapeHtml(title)}</div>
         <div class="tag-list" data-tag-list="${role}">${tags}</div>
         <div class="tag-input-row">
-          <input type="text" data-tag-input="${role}" list="teacher-suggestions" placeholder="输入老师名字" />
+          <input type="text" data-tag-input="${role}" list="teacher-suggestions-${role}" placeholder="输入老师名字" />
           <button type="button" data-add-tag="${role}">加入</button>
         </div>
       </div>
@@ -672,6 +682,7 @@
     const start = data.startMinutes || 450;
     const end = data.endMinutes && data.endMinutes > start ? data.endMinutes : start + 30;
     const dayValue = parseDayOption(data.day);
+    const blocks = blockOptions(data.block);
     state.modalOpen = true;
 
     elModalRoot.innerHTML = `
@@ -682,11 +693,13 @@
             <div class="edit-grid">
               <label>礼拜
                 <select name="day">
-                  ${[1,2,3,4,5,6,7].map((d) => `<option value="${d}" ${String(d) === dayValue ? 'selected' : ''}>${d} · ${DAY_LABELS[d]}</option>`).join('')}
+                  ${DAY_VALUES.map((v) => `<option value="${v}" ${v === dayValue ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('')}
                 </select>
               </label>
               <label>BLOCK
-                <input name="block" type="text" value="${escapeHtml(data.block || '')}" required />
+                <select name="block" required>
+                  ${blocks.map((b) => `<option value="${escapeHtml(b)}" ${b === data.block ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('')}
+                </select>
               </label>
               <label>开始时间
                 ${renderTimeSelect('startMinutes', start)}
@@ -711,7 +724,7 @@
               </div>
             </div>
           </form>
-          ${renderTeacherDatalist()}
+          ${renderTeacherDatalists()}
         </div>
       </div>
     `;
