@@ -620,7 +620,9 @@
             <span class="time">${escapeHtml(rec.timeRange || '-')} (${escapeHtml(fmtHours(recordHours(rec)))}h)</span>
           </button>
         `).join('');
-        return `<div class="weekly-cell">${slots}</div>`;
+        const dayTotal = recs.reduce((sum, rec) => sum + recordHours(rec), 0);
+        const total = dayTotal > 0 ? `<div class="weekly-day-total">当天: ${escapeHtml(fmtHours(dayTotal))}h</div>` : '';
+        return `<div class="weekly-cell">${slots}${total}</div>`;
       }).join('');
       return first + days;
     }).join('');
