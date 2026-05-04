@@ -18,11 +18,24 @@ FIELD_TEACHING = "教书老师"
 FIELD_ASSISTANT = "助理"
 FIELD_ASSISTANT_TEACHER = "助教"
 
+STAFF_FIELD_DAYCARE = "daycare老师"
+STAFF_FIELD_TEACHING = "教书帮忙老师"
+STAFF_FIELD_ASSISTANT = "助理老师"
+STAFF_FIELD_ASSISTANT_TEACHER = "助教老师"
+
 ROLE_FIELDS = {
     "daycare": FIELD_DAYCARE,
     "teaching": FIELD_TEACHING,
     "assistant": FIELD_ASSISTANT,
     "assistantTeacher": FIELD_ASSISTANT_TEACHER,
+}
+ROLE_KEYS = tuple(ROLE_FIELDS.keys())
+
+STAFF_ROLE_FIELDS = {
+    "daycare": STAFF_FIELD_DAYCARE,
+    "teaching": STAFF_FIELD_TEACHING,
+    "assistant": STAFF_FIELD_ASSISTANT,
+    "assistantTeacher": STAFF_FIELD_ASSISTANT_TEACHER,
 }
 
 WRITABLE_FIELDS = {
@@ -38,6 +51,9 @@ def get_env():
         if not v:
             raise RuntimeError(f"Missing {k}")
         env[k] = v.strip()
+    staff_table_id = os.environ.get("LARK_STAFF_TABLE_ID")
+    if staff_table_id:
+        env["LARK_STAFF_TABLE_ID"] = staff_table_id.strip()
     return env
 
 
@@ -54,8 +70,8 @@ def get_tenant_access_token(app_id, app_secret):
     return data["tenant_access_token"]
 
 
-def records_url(env, record_id=None):
-    base = LARK_RECORDS_URL.format(app=env["LARK_BASE_TOKEN"], table=env["LARK_TABLE_ID"])
+def records_url(env, record_id=None, table_id=None):
+    base = LARK_RECORDS_URL.format(app=env["LARK_BASE_TOKEN"], table=table_id or env["LARK_TABLE_ID"])
     return f"{base}/{record_id}" if record_id else base
 
 
@@ -83,7 +99,7 @@ def raise_lark_http_error(resp, action):
     raise RuntimeError(f"Lark {action}记录失败：HTTP {resp.status_code}{detail}")
 
 
-def fetch_all_records(token, env):
+def fetch_all_records(token, env, table_id=None):
     headers = {"Authorization": f"Bearer {token}"}
     out = []
     page_token = None
@@ -91,7 +107,7 @@ def fetch_all_records(token, env):
         params = {"page_size": 500}
         if page_token:
             params["page_token"] = page_token
-        resp = requests.get(records_url(env), headers=headers, params=params, timeout=15)
+        resp = requests.get(records_url(env, table_id=table_id), headers=headers, params=params, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         if data.get("code") != 0:
@@ -104,6 +120,13 @@ def fetch_all_records(token, env):
         if not page_token:
             break
     return out
+
+
+def fetch_staff_records(token, env):
+    table_id = env.get("LARK_STAFF_TABLE_ID")
+    if not table_id:
+        return []
+    return fetch_all_records(token, env, table_id=table_id)
 
 
 def lark_create_record(token, env, fields):
@@ -282,6 +305,21 @@ def normalize_record(item):
     }
 
 
+def normalize_staff_roles(items):
+    roles = {key: [] for key in ROLE_KEYS}
+    seen = {key: set() for key in ROLE_KEYS}
+    for item in items:
+        fields = item.get("fields", {}) or {}
+        for role_key, field_name in STAFF_ROLE_FIELDS.items():
+            for name in extract_list(fields.get(field_name)):
+                if name and name not in seen[role_key]:
+                    roles[role_key].append(name)
+                    seen[role_key].add(name)
+    for role_key in roles:
+        roles[role_key].sort()
+    return roles
+
+
 def sanitize_fields(raw):
     """Filter incoming fields dict to known writable keys and coerce types."""
     out = {}
@@ -322,7 +360,15 @@ def validate_teacher_role_bindings(token, env, fields, current_record_id=None):
         else:
             role_by_teacher[name] = role_key
 
+    for item in fetch_staff_records(token, env):
+        raw = item.get("fields", {}) or {}
+        for role_key, field_name in STAFF_ROLE_FIELDS.items():
+            for name in extract_list(raw.get(field_name)):
+                add_binding(name, role_key)
+
     for item in fetch_all_records(token, env):
+        if current_record_id and item.get("record_id") == current_record_id:
+            continue
         raw = item.get("fields", {}) or {}
         for role_key, field_name in ROLE_FIELDS.items():
             for name in extract_list(raw.get(field_name)):

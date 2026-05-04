@@ -84,11 +84,14 @@ LARK_APP_ID
 LARK_APP_SECRET
 LARK_BASE_TOKEN
 LARK_TABLE_ID
+LARK_STAFF_TABLE_ID
 ```
 
 `LARK_BASE_TOKEN` is the Lark Base app token.
 
 `LARK_TABLE_ID` is the target table ID.
+
+`LARK_STAFF_TABLE_ID` is the optional staff roster table ID used to bind names to the four manpower roles.
 
 Do not hardcode credentials in source files.
 
@@ -1233,6 +1236,7 @@ api/create-schedule.py
 api/update-schedule.py
 api/delete-schedule.py
 api/schedule.py
+api/staff.py
 ```
 
 Frontend entry points:
@@ -1280,15 +1284,27 @@ One teacher name must belong to one role only.
 
 This is enforced in both frontend and backend.
 
+Role binding now prefers the staff roster table configured by `LARK_STAFF_TABLE_ID`.
+
+Roster table fields:
+
+```text
+daycare老师 -> DAYCARE老师
+教书帮忙老师 -> 教书老师
+助理老师 -> 助理
+助教老师 -> 助教
+```
+
 Frontend:
 
 * A teacher already bound to DAYCARE cannot be added as 助理/助教/教书
 * Same teacher cannot be added to multiple roles in the same slot
 * Custom suggestions show only teachers compatible with that role
+* If the roster table has names for a role, suggestions come from that role's roster list first
 
 Backend:
 
-* `validate_teacher_role_bindings()` scans current Lark records before create/update
+* `validate_teacher_role_bindings()` scans the staff roster table and current Lark schedule records before create/update
 * If a teacher is already bound to another role, update/create is rejected
 * If existing Lark data already has a teacher in multiple roles, the API rejects and asks to clean Lark data first
 

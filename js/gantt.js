@@ -41,6 +41,7 @@
 
   const state = {
     records: [],
+    staffRoles: { daycare: [], teaching: [], assistant: [], assistantTeacher: [] },
     updatedAt: null,
     teacherThreshold: DEFAULT_TEACHER_THRESHOLD,
     manpowerThreshold: DEFAULT_MANPOWER_THRESHOLD,
@@ -168,14 +169,29 @@
 
   function unique(arr) { return Array.from(new Set(arr)); }
 
+  function staffTeachers() {
+    return ROLE_KEYS.flatMap((role) => state.staffRoles[role] || []);
+  }
+
   function allTeachers() {
-    return unique(state.records.flatMap((r) => [
-      ...r.daycareTeachers, ...r.teachingTeachers, ...r.assistants, ...r.assistantTeachers
-    ])).sort((a, b) => a.localeCompare(b, 'zh'));
+    return unique([
+      ...staffTeachers(),
+      ...state.records.flatMap((r) => [
+        ...r.daycareTeachers, ...r.teachingTeachers, ...r.assistants, ...r.assistantTeachers
+      ])
+    ]).sort((a, b) => a.localeCompare(b, 'zh'));
   }
 
   function teacherRoleMap() {
     const map = new Map();
+    for (const role of ROLE_KEYS) {
+      for (const name of state.staffRoles[role] || []) {
+        if (!name) continue;
+        const prev = map.get(name);
+        if (prev && prev !== role) map.set(name, 'conflict');
+        else map.set(name, role);
+      }
+    }
     for (const rec of state.records) {
       for (const role of ROLE_KEYS) {
         for (const name of rec[ROLE_FIELD[role]] || []) {
@@ -723,7 +739,9 @@
 
   function compatibleTeachers(role) {
     const roleMap = teacherRoleMap();
-    return allTeachers().filter((name) => roleMap.get(name) === role);
+    const staffList = state.staffRoles[role] || [];
+    const source = staffList.length ? staffList : allTeachers();
+    return unique(source).filter((name) => roleMap.get(name) === role).sort((a, b) => a.localeCompare(b, 'zh'));
   }
 
   function renderTimeSelect(name, current, min) {
@@ -1152,6 +1170,10 @@
       if (hash === state.lastPayloadHash && !initial) return;
       state.lastPayloadHash = hash;
       state.records = data.records || [];
+      state.staffRoles = Object.assign(
+        { daycare: [], teaching: [], assistant: [], assistantTeacher: [] },
+        data.staffRoles || {}
+      );
       state.updatedAt = data.updatedAt || null;
       elMeta.textContent = `共 ${state.records.length} 条记录　|　更新时间 ${state.updatedAt || '-'}`;
       populateFilterOptions();
