@@ -534,21 +534,31 @@
     for (const t of stats) byRole[t.role] = (byRole[t.role] || 0) + 1;
 
     const cards = [
-      { label: '老师总数', value: totalTeachers, cls: '' },
-      { label: 'DAYCARE 老师', value: byRole.daycare, cls: '' },
-      { label: '教书老师', value: byRole.teaching, cls: '' },
-      { label: '助理', value: byRole.assistant, cls: '' },
-      { label: '助教', value: byRole.assistantTeacher, cls: '' },
+      { label: '老师总数', value: totalTeachers, cls: '', role: '' },
+      { label: 'DAYCARE 老师', value: byRole.daycare, cls: '', role: 'daycare' },
+      { label: '教书老师', value: byRole.teaching, cls: '', role: 'teaching' },
+      { label: '助理', value: byRole.assistant, cls: '', role: 'assistant' },
+      { label: '助教', value: byRole.assistantTeacher, cls: '', role: 'assistantTeacher' },
       { label: '总工时', value: `${fmtHours(totalHours)}h`, cls: '' },
       { label: '人均工时', value: `${fmtHours(avgHours)}h`, cls: '' },
       { label: '总时段数', value: totalSlots, cls: '' }
     ];
     elTeachersSummary.innerHTML = cards.map((c) => `
-      <div class="card ${c.cls}">
+      <div class="card ${c.cls} ${c.role !== undefined ? 'clickable' : ''} ${c.role !== undefined && state.filters.role === c.role ? 'active' : ''}" ${c.role !== undefined ? `data-filter-role="${escapeHtml(c.role)}"` : ''}>
         <div class="label">${escapeHtml(c.label)}</div>
         <div class="value">${escapeHtml(String(c.value))}</div>
       </div>
     `).join('');
+    elTeachersSummary.querySelectorAll('[data-filter-role]').forEach((card) => {
+      card.addEventListener('click', () => setRoleFilter(card.getAttribute('data-filter-role')));
+    });
+  }
+
+  function setRoleFilter(role) {
+    state.filters.role = role || '';
+    state.filters.teacher = '';
+    syncFilterControls();
+    rerender();
   }
 
   function renderRoleWorkload(stats) {
@@ -573,7 +583,7 @@
       `).join('');
       const more = unassigned.length > 6 ? `另 ${unassigned.length - 6} 人` : '';
       return `
-        <div class="role-workload-card">
+        <button type="button" class="role-workload-card ${state.filters.role === role ? 'active' : ''}" data-role-card="${role}">
           <div class="role-title">
             <strong><span class="role-pill ${role}">${escapeHtml(ROLE_LABEL[role])}</span></strong>
             <span class="role-total">${assigned}/${total} 已排班</span>
@@ -587,13 +597,19 @@
           <div class="unassigned-list">
             未排班：${unassigned.length ? names + escapeHtml(more ? ` ${more}` : '') : '无'}
           </div>
-        </div>
+        </button>
       `;
     }).join('');
 
     elRoleWorkload.innerHTML = `<div class="role-workload-grid">${cards}</div>`;
+    elRoleWorkload.querySelectorAll('[data-role-card]').forEach((card) => {
+      card.addEventListener('click', () => setRoleFilter(card.getAttribute('data-role-card')));
+    });
     elRoleWorkload.querySelectorAll('[data-role-person]').forEach((btn) => {
-      btn.addEventListener('click', () => openTeacherDetail(btn.getAttribute('data-role-person'), stats));
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openTeacherDetail(btn.getAttribute('data-role-person'), stats);
+      });
     });
   }
 
