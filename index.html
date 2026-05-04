@@ -600,6 +600,76 @@
   }
   .heatmap .cell.total { font-weight: 700; }
 
+  .weekly-schedule-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .weekly-schedule {
+    min-width: 980px;
+    display: grid;
+    grid-template-columns: 140px repeat(7, minmax(120px, 1fr));
+    background: var(--border);
+    gap: 1px;
+    font-size: 12px;
+  }
+  .weekly-cell {
+    background: var(--panel);
+    min-height: 76px;
+    padding: 8px;
+  }
+  .weekly-head {
+    min-height: 38px;
+    background: var(--panel-2);
+    color: var(--text);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .weekly-teacher {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .weekly-teacher .name {
+    color: var(--accent);
+    font-weight: 800;
+    font-size: 13px;
+  }
+  .weekly-teacher .hours {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .weekly-slot {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    padding: 6px 7px;
+    margin-bottom: 5px;
+    color: #fff;
+    font-weight: 700;
+    line-height: 1.25;
+    cursor: pointer;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  }
+  .weekly-slot:last-child { margin-bottom: 0; }
+  .weekly-slot:hover { filter: brightness(1.12); }
+  .weekly-slot .time {
+    display: block;
+    font-weight: 600;
+    opacity: 0.96;
+  }
+  .weekly-slot.block-hm { background: #7c3aed; }
+  .weekly-slot.block-pu { background: #3b82f6; }
+  .weekly-slot.block-subang { background: #f97316; }
+  .weekly-slot.block-other { background: #64748b; }
+
   /* Mini gantt for teacher detail */
   .mini-gantt {
     width: 100%;
@@ -646,6 +716,8 @@
     .teachers-table td.bar-cell { width: 120px; }
     .heatmap { grid-template-columns: 100px repeat(7, 1fr) 60px; font-size: 11px; }
     .heatmap .cell { padding: 4px 4px; }
+    .weekly-schedule { grid-template-columns: 110px repeat(7, minmax(110px, 1fr)); font-size: 11px; }
+    .weekly-cell { padding: 6px; }
   }
 
   @media (max-width: 640px) {
@@ -765,6 +837,13 @@
       <div class="panel-card">
         <h3>热力图：老师 × 星期（颜色越深 = 工时越多）</h3>
         <div id="teachers-heatmap"></div>
+      </div>
+
+      <div class="panel-card">
+        <h3>老师工作时间表</h3>
+        <div class="weekly-schedule-wrap">
+          <div id="teachers-weekly-schedule"></div>
+        </div>
       </div>
     </div>
   </section>

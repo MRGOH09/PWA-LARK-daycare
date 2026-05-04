@@ -10,6 +10,10 @@
     1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU',
     5: 'FRI', 6: 'SAT', 7: 'SUN'
   };
+  const DAY_CN = {
+    1: '星期一', 2: '星期二', 3: '星期三', 4: '星期四',
+    5: '星期五', 6: '星期六', 7: '星期日'
+  };
   const DAY_VALUES = [1, 2, 3, 4, 5, 6, 7].map((d) => `${d}.${DAY_LABELS[d]}`);
   const ROLE_KEYS = ['daycare', 'teaching', 'assistant', 'assistantTeacher'];
   const ROLE_FIELD = {
@@ -65,6 +69,7 @@
   const elTeachersSummary = $('#teachers-summary');
   const elTeachersTable = $('#teachers-table');
   const elTeachersHeatmap = $('#teachers-heatmap');
+  const elTeachersWeeklySchedule = $('#teachers-weekly-schedule');
   const elMeta = $('#meta');
   const elModalRoot = $('#modal-root');
   const elViewGantt = $('#view-gantt');
@@ -576,11 +581,68 @@
     });
   }
 
+  function blockClass(block) {
+    const text = (block || '').toUpperCase();
+    if (text.includes('HM')) return 'block-hm';
+    if (text.includes('PU')) return 'block-pu';
+    if (text.includes('SUBANG')) return 'block-subang';
+    return 'block-other';
+  }
+
+  function blockScheduleLabel(block) {
+    const text = (block || '').trim();
+    if (/HM/i.test(text)) return 'HM';
+    if (/PU/i.test(text)) return 'PU';
+    if (/SUBANG/i.test(text)) return 'SUBANG';
+    return shortBlock(text) || text || '-';
+  }
+
+  function renderTeachersWeeklySchedule(stats) {
+    const sorted = sortTeacherStats(stats);
+    const headers = ['<div class="weekly-cell weekly-head">老师</div>']
+      .concat([1,2,3,4,5,6,7].map((d) => `<div class="weekly-cell weekly-head">${DAY_CN[d]}</div>`));
+
+    const rows = sorted.map((t) => {
+      const first = `
+        <div class="weekly-cell weekly-teacher" data-name="${escapeHtml(t.name)}">
+          <div class="name">${escapeHtml(t.name)}</div>
+          <div class="hours">周总工时: ${escapeHtml(fmtHours(t.hours))}h</div>
+        </div>
+      `;
+      const days = [1,2,3,4,5,6,7].map((d) => {
+        const recs = t.records
+          .filter((r) => r.dayOrder === d)
+          .slice()
+          .sort((a, b) => (a.startMinutes || 0) - (b.startMinutes || 0));
+        const slots = recs.map((rec) => `
+          <button type="button" class="weekly-slot ${blockClass(rec.block)}" data-record-id="${escapeHtml(rec.recordId)}">
+            ${escapeHtml(blockScheduleLabel(rec.block))}
+            <span class="time">${escapeHtml(rec.timeRange || '-')} (${escapeHtml(fmtHours(recordHours(rec)))}h)</span>
+          </button>
+        `).join('');
+        return `<div class="weekly-cell">${slots}</div>`;
+      }).join('');
+      return first + days;
+    }).join('');
+
+    elTeachersWeeklySchedule.innerHTML = `<div class="weekly-schedule">${headers.join('')}${rows || '<div class="weekly-cell">没有匹配的老师。</div>'}</div>`;
+    elTeachersWeeklySchedule.querySelectorAll('[data-record-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const rec = state.records.find((r) => r.recordId === btn.getAttribute('data-record-id'));
+        if (rec) openSlotDetail(rec);
+      });
+    });
+    elTeachersWeeklySchedule.querySelectorAll('.weekly-teacher[data-name]').forEach((el) => {
+      el.addEventListener('click', () => openTeacherDetail(el.getAttribute('data-name'), stats));
+    });
+  }
+
   function renderTeachersView(filtered) {
     const stats = computeTeacherStats(filtered);
     renderTeachersSummary(stats, filtered);
     renderTeachersTable(stats);
     renderTeachersHeatmap(stats);
+    renderTeachersWeeklySchedule(stats);
   }
 
   /* ============================================================
