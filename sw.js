@@ -1,4 +1,4 @@
-const CACHE = 'gantt-shell-v3';
+const CACHE = 'gantt-shell-v4';
 const ASSETS = [
   '/',
   '/index.html',

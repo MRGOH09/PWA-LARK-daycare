@@ -248,13 +248,23 @@
     fillSelect(elDay, days, state.filters.day);
     fillSelect(elBlock, blocks, state.filters.block);
     fillSelect(elTeacher, teachers, state.filters.teacher);
+    syncFilterControls();
   }
 
   function fillSelect(el, options, current) {
-    const previous = current || el.value;
     el.innerHTML = '<option value="">全部</option>' +
       options.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-    if (previous && options.includes(previous)) el.value = previous;
+    el.value = current && options.includes(current) ? current : '';
+  }
+
+  function syncFilterControls() {
+    elDay.value = state.filters.day || '';
+    elBlock.value = state.filters.block || '';
+    elRole.value = state.filters.role || '';
+    elTeacher.value = state.filters.teacher || '';
+    elStatus.value = state.filters.status || '';
+    elThresholdTeacher.value = String(state.teacherThreshold);
+    elThresholdManpower.value = String(state.manpowerThreshold);
   }
 
   /* ============================================================
@@ -1289,8 +1299,7 @@
     elAddSlot.addEventListener('click', () => openScheduleEditor(defaultNewRecord(), 'new'));
     elReset.addEventListener('click', () => {
       state.filters = { day: '', block: '', role: '', teacher: '', status: '' };
-      elDay.value = ''; elBlock.value = ''; elRole.value = '';
-      elTeacher.value = ''; elStatus.value = '';
+      syncFilterControls();
       rerender();
     });
     document.querySelectorAll('.tabs button').forEach((btn) => {
@@ -1299,6 +1308,7 @@
   }
 
   function init() {
+    syncFilterControls();
     bindFilters();
     switchView('gantt');
     loadSchedule(true);
