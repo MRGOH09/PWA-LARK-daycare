@@ -617,7 +617,7 @@
 
     elRoleWorkload.innerHTML = `<div class="role-workload-grid">${cards}</div>`;
     elRoleWorkload.querySelectorAll('[data-role-card]').forEach((card) => {
-      card.addEventListener('click', () => setRoleFilter(card.getAttribute('data-role-card'), 'ranking'));
+      card.addEventListener('click', () => openRoleDetail(card.getAttribute('data-role-card'), stats));
     });
     elRoleWorkload.querySelectorAll('[data-role-action]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -632,6 +632,63 @@
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         openTeacherDetail(btn.getAttribute('data-role-person'), stats);
+      });
+    });
+  }
+
+  function openRoleDetail(role, stats) {
+    const list = stats.filter((t) => t.role === role);
+    const assigned = list.filter((t) => t.hours > 0).sort((a, b) => b.hours - a.hours);
+    const unassigned = list.filter((t) => t.hours <= 0).sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+    const totalHours = list.reduce((sum, t) => sum + t.hours, 0);
+    const avgHours = list.length ? totalHours / list.length : 0;
+
+    const personButton = (t) => `
+      <button type="button" data-role-modal-person="${escapeHtml(t.name)}">
+        <span>${escapeHtml(t.name)}</span>
+        <span class="hours">${escapeHtml(fmtHours(t.hours))}h</span>
+      </button>
+    `;
+
+    state.modalOpen = true;
+    elModalRoot.innerHTML = `
+      <div class="modal-backdrop" id="modal-backdrop">
+        <div class="modal wide" role="dialog" aria-modal="true">
+          <h2><span class="role-pill ${role}">${escapeHtml(ROLE_LABEL[role])}</span> 工作量详情</h2>
+          <div class="role-modal-grid">
+            <div class="role-modal-metric"><span>总人数</span><b>${list.length}</b></div>
+            <div class="role-modal-metric"><span>已排班</span><b>${assigned.length}</b></div>
+            <div class="role-modal-metric"><span>总工时</span><b>${escapeHtml(fmtHours(totalHours))}h</b></div>
+            <div class="role-modal-metric"><span>人均工时</span><b>${escapeHtml(fmtHours(avgHours))}h</b></div>
+          </div>
+          <div class="role-modal-columns">
+            <div class="role-modal-list">
+              <h3>工时最高</h3>
+              ${assigned.slice(0, 8).map(personButton).join('') || '<div class="empty-state">无已排班人员</div>'}
+            </div>
+            <div class="role-modal-list">
+              <h3>未排班（${unassigned.length}）</h3>
+              ${unassigned.map(personButton).join('') || '<div class="empty-state">无未排班人员</div>'}
+            </div>
+          </div>
+          <div class="actions split">
+            <button type="button" data-role-modal-view="ranking" data-role="${role}">看排行</button>
+            <div class="right">
+              <button type="button" data-role-modal-view="schedule" data-role="${role}">看时间表</button>
+              <button id="modal-close" type="button">关闭</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    bindModalCommon();
+    elModalRoot.querySelectorAll('[data-role-modal-person]').forEach((btn) => {
+      btn.addEventListener('click', () => openTeacherDetail(btn.getAttribute('data-role-modal-person'), stats));
+    });
+    elModalRoot.querySelectorAll('[data-role-modal-view]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        closeModal();
+        setRoleFilter(btn.getAttribute('data-role'), btn.getAttribute('data-role-modal-view'));
       });
     });
   }
