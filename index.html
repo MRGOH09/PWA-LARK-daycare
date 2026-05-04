@@ -177,6 +177,46 @@
     vertical-align: middle;
   }
 
+  .teacher-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px 12px;
+  }
+  .teacher-subtabs {
+    display: inline-flex;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+  .teacher-subtabs button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .teacher-subtabs button.active {
+    background: var(--accent);
+    color: #0b1220;
+  }
+  .filter-context {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .filter-context b {
+    color: var(--text);
+    font-weight: 700;
+  }
+
   .gantt-wrapper {
     padding: 0 12px 24px;
   }
@@ -565,12 +605,12 @@
     border-radius: 8px;
     background: var(--panel-2);
     padding: 12px;
-    cursor: pointer;
     text-align: left;
     color: var(--text);
     font: inherit;
     width: 100%;
   }
+  .role-workload-card[data-role-card] { cursor: pointer; }
   .role-workload-card:hover,
   .role-workload-card.active {
     border-color: var(--accent);
@@ -616,6 +656,12 @@
     font-size: 12px;
     line-height: 1.45;
   }
+  .unassigned-list summary {
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 700;
+  }
+  .unassigned-list div { margin-top: 6px; }
   .unassigned-list button {
     border: 0;
     background: transparent;
@@ -625,6 +671,13 @@
     cursor: pointer;
     font: inherit;
   }
+  .unassigned-collapsed {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+    margin-top: 10px;
+  }
+  .teacher-panel[hidden] { display: none; }
   .teachers-table tbody tr.zero-hours {
     color: var(--muted);
   }
@@ -871,7 +924,7 @@
     <input type="number" id="threshold-manpower" value="15" min="1" step="1" />
   </label>
   <span class="spacer"></span>
-  <button id="add-slot" type="button">新增时段</button>
+  <button id="add-slot" type="button" data-view-only="gantt">新增时段</button>
   <button id="reset" class="secondary" type="button">重置筛选</button>
   <button id="refresh" type="button">刷新</button>
 </section>
@@ -906,14 +959,23 @@
     <span><span class="dot" style="background: var(--role-assistantTeacher)"></span>助教</span>
   </div>
 
+  <div class="teacher-toolbar">
+    <div class="teacher-subtabs" id="teacher-subtabs" role="tablist">
+      <button type="button" data-teacher-view="overview" class="active">总览</button>
+      <button type="button" data-teacher-view="ranking">排行</button>
+      <button type="button" data-teacher-view="schedule">时间表</button>
+    </div>
+    <div class="filter-context" id="teacher-filter-context"></div>
+  </div>
+
   <section class="teachers-wrapper">
     <div class="teachers-grid">
-      <div class="panel-card">
+      <div class="panel-card teacher-panel" data-teacher-panel="overview">
         <h3>四个角色工作量概览</h3>
         <div id="role-workload"></div>
       </div>
 
-      <div class="panel-card">
+      <div class="panel-card teacher-panel" data-teacher-panel="ranking" hidden>
         <h3>老师排行（点击表头排序，点行看详情）</h3>
         <div class="teachers-table-wrap">
           <table class="teachers-table" id="teachers-table">
@@ -923,12 +985,12 @@
         </div>
       </div>
 
-      <div class="panel-card">
+      <div class="panel-card teacher-panel" data-teacher-panel="ranking" hidden>
         <h3>热力图：老师 × 星期（颜色越深 = 工时越多）</h3>
         <div id="teachers-heatmap"></div>
       </div>
 
-      <div class="panel-card">
+      <div class="panel-card teacher-panel" data-teacher-panel="schedule" hidden>
         <h3>老师工作时间表</h3>
         <div class="weekly-schedule-wrap">
           <div id="teachers-weekly-schedule"></div>

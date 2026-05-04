@@ -47,6 +47,7 @@
     manpowerThreshold: DEFAULT_MANPOWER_THRESHOLD,
     filters: { day: '', block: '', role: '', teacher: '', status: '' },
     view: 'gantt',
+    teacherView: 'overview',
     teacherSort: { key: 'hours', dir: 'desc' },
     lastPayloadHash: '',
     refreshTimer: null,
@@ -68,6 +69,8 @@
   const elGantt = $('#gantt-root');
   const elSummary = $('#summary');
   const elTeachersSummary = $('#teachers-summary');
+  const elTeacherFilterContext = $('#teacher-filter-context');
+  const elTeacherSubtabs = $('#teacher-subtabs');
   const elRoleWorkload = $('#role-workload');
   const elTeachersTable = $('#teachers-table');
   const elTeachersHeatmap = $('#teachers-heatmap');
@@ -534,24 +537,21 @@
     for (const t of stats) byRole[t.role] = (byRole[t.role] || 0) + 1;
 
     const cards = [
-      { label: '老师总数', value: totalTeachers, cls: '', role: '' },
-      { label: 'DAYCARE 老师', value: byRole.daycare, cls: '', role: 'daycare' },
-      { label: '教书老师', value: byRole.teaching, cls: '', role: 'teaching' },
-      { label: '助理', value: byRole.assistant, cls: '', role: 'assistant' },
-      { label: '助教', value: byRole.assistantTeacher, cls: '', role: 'assistantTeacher' },
+      { label: '老师总数', value: totalTeachers, cls: '' },
+      { label: 'DAYCARE 老师', value: byRole.daycare, cls: '' },
+      { label: '教书老师', value: byRole.teaching, cls: '' },
+      { label: '助理', value: byRole.assistant, cls: '' },
+      { label: '助教', value: byRole.assistantTeacher, cls: '' },
       { label: '总工时', value: `${fmtHours(totalHours)}h`, cls: '' },
       { label: '人均工时', value: `${fmtHours(avgHours)}h`, cls: '' },
       { label: '总时段数', value: totalSlots, cls: '' }
     ];
     elTeachersSummary.innerHTML = cards.map((c) => `
-      <div class="card ${c.cls} ${c.role !== undefined ? 'clickable' : ''} ${c.role !== undefined && state.filters.role === c.role ? 'active' : ''}" ${c.role !== undefined ? `data-filter-role="${escapeHtml(c.role)}"` : ''}>
+      <div class="card ${c.cls}">
         <div class="label">${escapeHtml(c.label)}</div>
         <div class="value">${escapeHtml(String(c.value))}</div>
       </div>
     `).join('');
-    elTeachersSummary.querySelectorAll('[data-filter-role]').forEach((card) => {
-      card.addEventListener('click', () => setRoleFilter(card.getAttribute('data-filter-role')));
-    });
   }
 
   function setRoleFilter(role) {
@@ -578,12 +578,11 @@
       const maxHours = Math.max(0, ...list.map((t) => t.hours));
       const minAssignedHours = Math.min(...list.filter((t) => t.hours > 0).map((t) => t.hours));
       const minText = isFinite(minAssignedHours) ? `${fmtHours(minAssignedHours)}h` : '0h';
-      const names = unassigned.slice(0, 6).map((t) => `
+      const names = unassigned.map((t) => `
         <button type="button" data-role-person="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>
       `).join('');
-      const more = unassigned.length > 6 ? `另 ${unassigned.length - 6} 人` : '';
       return `
-        <button type="button" class="role-workload-card ${state.filters.role === role ? 'active' : ''}" data-role-card="${role}">
+        <div class="role-workload-card ${state.filters.role === role ? 'active' : ''}" data-role-card="${role}">
           <div class="role-title">
             <strong><span class="role-pill ${role}">${escapeHtml(ROLE_LABEL[role])}</span></strong>
             <span class="role-total">${assigned}/${total} 已排班</span>
@@ -594,10 +593,13 @@
             <div class="metric"><span>最高工时</span><b>${escapeHtml(fmtHours(maxHours))}h</b></div>
             <div class="metric"><span>最低已排</span><b>${escapeHtml(minText)}</b></div>
           </div>
-          <div class="unassigned-list">
-            未排班：${unassigned.length ? names + escapeHtml(more ? ` ${more}` : '') : '无'}
-          </div>
-        </button>
+          ${unassigned.length ? `
+            <details class="unassigned-list">
+              <summary>未排班：${unassigned.length} 人</summary>
+              <div>${names}</div>
+            </details>
+          ` : '<div class="unassigned-collapsed">未排班：无</div>'}
+        </div>
       `;
     }).join('');
 
@@ -605,11 +607,34 @@
     elRoleWorkload.querySelectorAll('[data-role-card]').forEach((card) => {
       card.addEventListener('click', () => setRoleFilter(card.getAttribute('data-role-card')));
     });
+    elRoleWorkload.querySelectorAll('.unassigned-list').forEach((details) => {
+      details.addEventListener('click', (e) => e.stopPropagation());
+    });
     elRoleWorkload.querySelectorAll('[data-role-person]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         openTeacherDetail(btn.getAttribute('data-role-person'), stats);
       });
+    });
+  }
+
+  function renderTeacherFilterContext() {
+    const bits = [
+      state.filters.role ? ROLE_LABEL[state.filters.role] : '全部角色',
+      state.filters.teacher || '全部老师',
+      state.filters.day || '全部星期',
+      state.filters.block || '全部 BLOCK'
+    ];
+    elTeacherFilterContext.innerHTML = `当前查看：<b>${bits.map(escapeHtml).join(' · ')}</b>`;
+  }
+
+  function syncTeacherViewControls() {
+    document.querySelectorAll('[data-teacher-panel]').forEach((panel) => {
+      panel.hidden = panel.getAttribute('data-teacher-panel') !== state.teacherView;
+    });
+    if (!elTeacherSubtabs) return;
+    elTeacherSubtabs.querySelectorAll('[data-teacher-view]').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-teacher-view') === state.teacherView);
     });
   }
 
@@ -754,6 +779,8 @@
   function renderTeachersView(filtered) {
     const stats = computeTeacherStats(filtered);
     renderTeachersSummary(stats, filtered);
+    renderTeacherFilterContext();
+    syncTeacherViewControls();
     renderRoleWorkload(stats);
     renderTeachersTable(stats);
     renderTeachersHeatmap(stats);
@@ -1321,6 +1348,14 @@
     document.querySelectorAll('.tabs button').forEach((btn) => {
       btn.addEventListener('click', () => switchView(btn.getAttribute('data-view')));
     });
+    if (elTeacherSubtabs) {
+      elTeacherSubtabs.querySelectorAll('[data-teacher-view]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.teacherView = btn.getAttribute('data-teacher-view') || 'overview';
+          rerender();
+        });
+      });
+    }
   }
 
   function init() {
