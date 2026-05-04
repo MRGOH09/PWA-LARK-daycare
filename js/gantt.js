@@ -68,6 +68,7 @@
   const elGantt = $('#gantt-root');
   const elSummary = $('#summary');
   const elTeachersSummary = $('#teachers-summary');
+  const elRoleWorkload = $('#role-workload');
   const elTeachersTable = $('#teachers-table');
   const elTeachersHeatmap = $('#teachers-heatmap');
   const elTeachersWeeklySchedule = $('#teachers-weekly-schedule');
@@ -433,6 +434,27 @@
 
   function computeTeacherStats(records) {
     const map = new Map();
+    const activeRole = state.filters.role || '';
+
+    for (const role of ROLE_KEYS) {
+      if (activeRole && role !== activeRole) continue;
+      for (const name of state.staffRoles[role] || []) {
+        if (!name || map.has(name)) continue;
+        map.set(name, {
+          name,
+          role,
+          roles: new Set([role]),
+          slots: 0,
+          hours: 0,
+          studentHours: 0,
+          sharedStudentHours: 0,
+          byDay: {},
+          records: [],
+          rosterOnly: true
+        });
+      }
+    }
+
     for (const rec of records) {
       const hours = recordHours(rec);
       if (hours <= 0) continue;
@@ -453,11 +475,13 @@
               studentHours: 0,
               sharedStudentHours: 0,
               byDay: {},
-              records: []
+              records: [],
+              rosterOnly: false
             });
           }
           const s = map.get(name);
           s.roles.add(role);
+          s.rosterOnly = false;
           s.slots += 1;
           s.hours += hours;
           s.studentHours += rec.studentCount * hours;
@@ -517,6 +541,52 @@
     `).join('');
   }
 
+  function renderRoleWorkload(stats) {
+    const byRole = Object.fromEntries(ROLE_KEYS.map((role) => [role, []]));
+    for (const t of stats) {
+      if (!byRole[t.role]) byRole[t.role] = [];
+      byRole[t.role].push(t);
+    }
+
+    const cards = ROLE_KEYS.map((role) => {
+      const list = byRole[role] || [];
+      const total = list.length;
+      const assigned = list.filter((t) => t.hours > 0).length;
+      const unassigned = list.filter((t) => t.hours <= 0);
+      const totalHours = list.reduce((sum, t) => sum + t.hours, 0);
+      const avgHours = total ? totalHours / total : 0;
+      const maxHours = Math.max(0, ...list.map((t) => t.hours));
+      const minAssignedHours = Math.min(...list.filter((t) => t.hours > 0).map((t) => t.hours));
+      const minText = isFinite(minAssignedHours) ? `${fmtHours(minAssignedHours)}h` : '0h';
+      const names = unassigned.slice(0, 6).map((t) => `
+        <button type="button" data-role-person="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>
+      `).join('');
+      const more = unassigned.length > 6 ? `另 ${unassigned.length - 6} 人` : '';
+      return `
+        <div class="role-workload-card">
+          <div class="role-title">
+            <strong><span class="role-pill ${role}">${escapeHtml(ROLE_LABEL[role])}</span></strong>
+            <span class="role-total">${assigned}/${total} 已排班</span>
+          </div>
+          <div class="role-metrics">
+            <div class="metric"><span>总工时</span><b>${escapeHtml(fmtHours(totalHours))}h</b></div>
+            <div class="metric"><span>人均工时</span><b>${escapeHtml(fmtHours(avgHours))}h</b></div>
+            <div class="metric"><span>最高工时</span><b>${escapeHtml(fmtHours(maxHours))}h</b></div>
+            <div class="metric"><span>最低已排</span><b>${escapeHtml(minText)}</b></div>
+          </div>
+          <div class="unassigned-list">
+            未排班：${unassigned.length ? names + escapeHtml(more ? ` ${more}` : '') : '无'}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    elRoleWorkload.innerHTML = `<div class="role-workload-grid">${cards}</div>`;
+    elRoleWorkload.querySelectorAll('[data-role-person]').forEach((btn) => {
+      btn.addEventListener('click', () => openTeacherDetail(btn.getAttribute('data-role-person'), stats));
+    });
+  }
+
   function renderTeachersTable(stats) {
     const sorted = sortTeacherStats(stats);
     const maxHours = Math.max(1, ...sorted.map((t) => t.hours));
@@ -543,7 +613,7 @@
         const cls = c.align === 'right' ? 'num' : '';
         return `<td class="${cls}">${c.fmt(t)}</td>`;
       }).join('');
-      return `<tr data-name="${escapeHtml(t.name)}">${cells}<td class="bar-cell"><div class="hbar"><span style="width:${pct.toFixed(1)}%; background: var(--role-${t.role})"></span></div></td></tr>`;
+      return `<tr data-name="${escapeHtml(t.name)}" class="${t.hours <= 0 ? 'zero-hours' : ''}">${cells}<td class="bar-cell"><div class="hbar"><span style="width:${pct.toFixed(1)}%; background: var(--role-${t.role})"></span></div></td></tr>`;
     }).join('');
 
     elTeachersTable.querySelector('thead').innerHTML = head;
@@ -658,6 +728,7 @@
   function renderTeachersView(filtered) {
     const stats = computeTeacherStats(filtered);
     renderTeachersSummary(stats, filtered);
+    renderRoleWorkload(stats);
     renderTeachersTable(stats);
     renderTeachersHeatmap(stats);
     renderTeachersWeeklySchedule(stats);

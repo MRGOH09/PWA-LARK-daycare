@@ -555,6 +555,70 @@
   .role-pill.assistant         { background: var(--role-assistant); }
   .role-pill.assistantTeacher  { background: var(--role-assistantTeacher); }
 
+  .role-workload-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .role-workload-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    padding: 12px;
+  }
+  .role-workload-card .role-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .role-workload-card .role-title strong {
+    font-size: 14px;
+  }
+  .role-workload-card .role-total {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .role-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    font-size: 12px;
+  }
+  .role-metrics .metric {
+    background: rgba(15,23,42,0.38);
+    border-radius: 6px;
+    padding: 7px;
+  }
+  .role-metrics .metric span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+  .role-metrics .metric b {
+    font-size: 15px;
+  }
+  .unassigned-list {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .unassigned-list button {
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    padding: 0;
+    margin: 0 5px 0 0;
+    cursor: pointer;
+    font: inherit;
+  }
+  .teachers-table tbody tr.zero-hours {
+    color: var(--muted);
+  }
+
   .hbar {
     background: var(--panel-2);
     border-radius: 4px;
@@ -723,6 +787,7 @@
     .edit-grid { grid-template-columns: 1fr; }
     .teachers-table th, .teachers-table td { padding: 6px 6px; font-size: 12px; }
     .teachers-table td.bar-cell { width: 120px; }
+    .role-workload-grid { grid-template-columns: 1fr; }
     .heatmap { grid-template-columns: 100px repeat(7, 1fr) 60px; font-size: 11px; }
     .heatmap .cell { padding: 4px 4px; }
     .weekly-schedule { grid-template-columns: 110px repeat(7, minmax(110px, 1fr)); font-size: 11px; }
@@ -833,6 +898,11 @@
 
   <section class="teachers-wrapper">
     <div class="teachers-grid">
+      <div class="panel-card">
+        <h3>四个角色工作量概览</h3>
+        <div id="role-workload"></div>
+      </div>
+
       <div class="panel-card">
         <h3>老师排行（点击表头排序，点行看详情）</h3>
         <div class="teachers-table-wrap">
