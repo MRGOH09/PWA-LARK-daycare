@@ -426,24 +426,51 @@
     font-size: 13px;
     color: var(--muted);
   }
-  .role-modal-list button {
+  .role-modal-person {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
     width: 100%;
-    border: 0;
     border-bottom: 1px solid rgba(51,65,85,0.7);
-    background: transparent;
-    color: var(--text);
     padding: 7px 0;
-    cursor: pointer;
-    text-align: left;
   }
-  .role-modal-list button:last-child { border-bottom: 0; }
-  .role-modal-list button:hover { color: var(--accent); }
+  .role-modal-person:last-child { border-bottom: 0; }
   .role-modal-list .hours {
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+  }
+  .role-modal-person .main {
+    min-width: 0;
+  }
+  .role-modal-person .name {
+    display: block;
+    color: var(--text);
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+  .role-modal-person .tools {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  .role-modal-person button {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: rgba(15,23,42,0.42);
+    color: var(--text);
+    padding: 5px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .role-modal-person button.primary {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .role-modal-person button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .edit-form {
     display: grid;
