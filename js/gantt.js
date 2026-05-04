@@ -651,7 +651,6 @@
         </div>
         <div class="tools">
           <button type="button" data-role-modal-person="${escapeHtml(t.name)}">查看</button>
-          <button type="button" class="primary" data-role-assign-person="${escapeHtml(t.name)}" data-role="${role}">安排</button>
         </div>
       </div>
     `;
@@ -678,8 +677,9 @@
             </div>
           </div>
           <div class="actions split">
-            <button type="button" data-role-modal-view="ranking" data-role="${role}">看排行</button>
+            <button type="button" class="primary" data-create-staff-role="${role}">新增人手</button>
             <div class="right">
+              <button type="button" data-role-modal-view="ranking" data-role="${role}">看排行</button>
               <button type="button" data-role-modal-view="schedule" data-role="${role}">看时间表</button>
               <button id="modal-close" type="button">关闭</button>
             </div>
@@ -691,8 +691,8 @@
     elModalRoot.querySelectorAll('[data-role-modal-person]').forEach((btn) => {
       btn.addEventListener('click', () => openTeacherDetail(btn.getAttribute('data-role-modal-person'), stats));
     });
-    elModalRoot.querySelectorAll('[data-role-assign-person]').forEach((btn) => {
-      btn.addEventListener('click', () => openAssignPersonModal(btn.getAttribute('data-role'), btn.getAttribute('data-role-assign-person')));
+    elModalRoot.querySelectorAll('[data-create-staff-role]').forEach((btn) => {
+      btn.addEventListener('click', () => openCreateStaffModal(btn.getAttribute('data-create-staff-role')));
     });
     elModalRoot.querySelectorAll('[data-role-modal-view]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -702,44 +702,25 @@
     });
   }
 
-  function assignmentCandidates() {
-    return state.records
-      .filter((rec) => rec.recordId)
-      .filter((rec) => !state.filters.day || rec.day === state.filters.day)
-      .filter((rec) => !state.filters.block || rec.block === state.filters.block)
-      .filter((rec) => rec.startMinutes != null && rec.endMinutes != null)
-      .slice()
-      .sort((a, b) => (a.dayOrder - b.dayOrder) || ((a.startMinutes || 0) - (b.startMinutes || 0)) || a.block.localeCompare(b.block, 'zh'));
-  }
-
-  function openAssignPersonModal(role, name) {
-    const candidates = assignmentCandidates();
+  function openCreateStaffModal(role) {
     state.modalOpen = true;
-    const options = candidates.map((rec) => {
-      const current = rec[ROLE_FIELD[role]] || [];
-      const suffix = current.includes(name) ? '（已在此时段）' : '';
-      return `<option value="${escapeHtml(rec.recordId)}">${escapeHtml(`${rec.day} · ${rec.block} · ${rec.timeRange || '-'} · ${rec.studentCount}人${suffix}`)}</option>`;
-    }).join('');
-
     elModalRoot.innerHTML = `
       <div class="modal-backdrop" id="modal-backdrop">
         <div class="modal" role="dialog" aria-modal="true">
-          <h2>安排 ${escapeHtml(name)}</h2>
-          <form class="edit-form" id="assign-person-form">
+          <h2>新增人手</h2>
+          <form class="edit-form" id="create-staff-form">
             <div class="tag-field">
               <div class="tag-field-title">角色</div>
               <span class="role-pill ${role}">${escapeHtml(ROLE_LABEL[role])}</span>
             </div>
-            <label>加入到时段
-              <select name="recordId" required>
-                ${options || '<option value="">没有可选时段</option>'}
-              </select>
+            <label>姓名
+              <input name="name" type="text" autocomplete="off" placeholder="输入新老师 / 助理名字" required />
             </label>
             <div class="form-error" id="form-error"></div>
             <div class="actions split">
               <button type="button" id="modal-close">取消</button>
               <div class="right">
-                <button type="submit" class="primary" ${candidates.length ? '' : 'disabled'}>保存安排</button>
+                <button type="submit" class="primary">加入名单</button>
               </div>
             </div>
           </form>
@@ -747,33 +728,24 @@
       </div>
     `;
     bindModalCommon();
-    const form = document.getElementById('assign-person-form');
+    const form = document.getElementById('create-staff-form');
+    form.elements.name.focus();
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      saveAssignPerson(role, name, form.elements.recordId.value);
+      saveCreateStaff(role, form.elements.name.value);
     });
   }
 
-  async function saveAssignPerson(role, name, recordId) {
-    const rec = state.records.find((r) => r.recordId === recordId);
-    if (!rec) {
-      showFormError('请选择一个时段');
-      return;
-    }
-    const list = rec[ROLE_FIELD[role]] || [];
-    if (list.includes(name)) {
-      showFormError(`${name} 已经在这个时段里`);
+  async function saveCreateStaff(role, rawName) {
+    const name = (rawName || '').trim();
+    if (!name) {
+      showFormError('姓名不能为空');
       return;
     }
     try {
       showFormError('');
       setFormBusy(true);
-      await postJson('/api/update-schedule', {
-        recordId,
-        fields: {
-          [LARK_FIELDS[role]]: [...list, name]
-        }
-      });
+      await postJson('/api/create-staff', { role, name });
       closeModal();
       state.lastPayloadHash = '';
       await loadSchedule(false);

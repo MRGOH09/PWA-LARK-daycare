@@ -129,9 +129,9 @@ def fetch_staff_records(token, env):
     return fetch_all_records(token, env, table_id=table_id)
 
 
-def lark_create_record(token, env, fields):
+def lark_create_record(token, env, fields, table_id=None):
     resp = requests.post(
-        records_url(env),
+        records_url(env, table_id=table_id),
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         json={"fields": fields},
         timeout=15,
