@@ -475,7 +475,7 @@
         (sum, k) => sum + (rec[ROLE_FIELD[k]] || []).length, 0);
       const sharePerPerson = totalManpower > 0 ? rec.studentCount / totalManpower : 0;
 
-      for (const role of ROLE_KEYS) {
+      for (const role of activeRole ? [activeRole] : ROLE_KEYS) {
         const list = rec[ROLE_FIELD[role]] || [];
         for (const name of list) {
           if (!map.has(name)) {
@@ -536,12 +536,18 @@
     const byRole = { daycare: 0, teaching: 0, assistant: 0, assistantTeacher: 0 };
     for (const t of stats) byRole[t.role] = (byRole[t.role] || 0) + 1;
 
+    const roleCards = state.filters.role
+      ? [{ label: `${ROLE_LABEL[state.filters.role]} 人数`, value: byRole[state.filters.role], cls: '' }]
+      : [
+        { label: 'DAYCARE 老师', value: byRole.daycare, cls: '' },
+        { label: '教书老师', value: byRole.teaching, cls: '' },
+        { label: '助理', value: byRole.assistant, cls: '' },
+        { label: '助教', value: byRole.assistantTeacher, cls: '' }
+      ];
+
     const cards = [
       { label: '老师总数', value: totalTeachers, cls: '' },
-      { label: 'DAYCARE 老师', value: byRole.daycare, cls: '' },
-      { label: '教书老师', value: byRole.teaching, cls: '' },
-      { label: '助理', value: byRole.assistant, cls: '' },
-      { label: '助教', value: byRole.assistantTeacher, cls: '' },
+      ...roleCards,
       { label: '总工时', value: `${fmtHours(totalHours)}h`, cls: '' },
       { label: '人均工时', value: `${fmtHours(avgHours)}h`, cls: '' },
       { label: '总时段数', value: totalSlots, cls: '' }
@@ -554,9 +560,10 @@
     `).join('');
   }
 
-  function setRoleFilter(role) {
+  function setRoleFilter(role, teacherView) {
     state.filters.role = role || '';
     state.filters.teacher = '';
+    if (teacherView) state.teacherView = teacherView;
     syncFilterControls();
     rerender();
   }
@@ -568,7 +575,8 @@
       byRole[t.role].push(t);
     }
 
-    const cards = ROLE_KEYS.map((role) => {
+    const rolesToShow = state.filters.role ? [state.filters.role] : ROLE_KEYS;
+    const cards = rolesToShow.map((role) => {
       const list = byRole[role] || [];
       const total = list.length;
       const assigned = list.filter((t) => t.hours > 0).length;
@@ -599,13 +607,23 @@
               <div>${names}</div>
             </details>
           ` : '<div class="unassigned-collapsed">未排班：无</div>'}
+          <div class="role-card-actions">
+            <button type="button" data-role-action="${role}" data-target-view="ranking">排行</button>
+            <button type="button" data-role-action="${role}" data-target-view="schedule">时间表</button>
+          </div>
         </div>
       `;
     }).join('');
 
     elRoleWorkload.innerHTML = `<div class="role-workload-grid">${cards}</div>`;
     elRoleWorkload.querySelectorAll('[data-role-card]').forEach((card) => {
-      card.addEventListener('click', () => setRoleFilter(card.getAttribute('data-role-card')));
+      card.addEventListener('click', () => setRoleFilter(card.getAttribute('data-role-card'), 'ranking'));
+    });
+    elRoleWorkload.querySelectorAll('[data-role-action]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setRoleFilter(btn.getAttribute('data-role-action'), btn.getAttribute('data-target-view'));
+      });
     });
     elRoleWorkload.querySelectorAll('.unassigned-list').forEach((details) => {
       details.addEventListener('click', (e) => e.stopPropagation());

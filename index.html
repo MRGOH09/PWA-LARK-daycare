@@ -677,6 +677,25 @@
     line-height: 1.45;
     margin-top: 10px;
   }
+  .role-card-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .role-card-actions button {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: rgba(15,23,42,0.42);
+    color: var(--text);
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .role-card-actions button:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
   .teacher-panel[hidden] { display: none; }
   .teachers-table tbody tr.zero-hours {
     color: var(--muted);
