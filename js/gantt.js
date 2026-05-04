@@ -243,6 +243,7 @@
     const total = filtered.length;
     let crisis = 0, overloaded = 0, warning = 0, noStudent = 0;
     let maxTeacherRatio = 0, maxManpowerRatio = 0;
+    let maxTeacherRecord = null, maxManpowerRecord = null;
     for (const rec of filtered) {
       const s = getRecordStatus(rec);
       if (s.kind === 'crisis') crisis++;
@@ -250,25 +251,45 @@
       else if (s.kind === 'warning') warning++;
       else if (s.kind === 'no-student') noStudent++;
       if (rec.studentCount > 0) {
-        if (isFinite(s.teacherRatio) && s.teacherRatio > maxTeacherRatio) maxTeacherRatio = s.teacherRatio;
-        if (isFinite(s.manpowerRatio) && s.manpowerRatio > maxManpowerRatio) maxManpowerRatio = s.manpowerRatio;
+        if (isFinite(s.teacherRatio) && s.teacherRatio > maxTeacherRatio) {
+          maxTeacherRatio = s.teacherRatio;
+          maxTeacherRecord = rec;
+        }
+        if (isFinite(s.manpowerRatio) && s.manpowerRatio > maxManpowerRatio) {
+          maxManpowerRatio = s.manpowerRatio;
+          maxManpowerRecord = rec;
+        }
       }
     }
     const cards = [
-      { label: '总时段数', value: total, cls: '' },
-      { label: '危机时段数', value: crisis, cls: 'crisis' },
-      { label: '超标时段数', value: overloaded, cls: 'overloaded' },
-      { label: '警戒时段数', value: warning, cls: 'warning' },
-      { label: '无学生时段数', value: noStudent, cls: 'no-student' },
-      { label: '最高老师学生比', value: maxTeacherRatio > 0 ? `${fmtRatio(maxTeacherRatio)}:1` : '—', cls: '' },
-      { label: '最高人手学生比', value: maxManpowerRatio > 0 ? `${fmtRatio(maxManpowerRatio)}:1` : '—', cls: '' }
+      { label: '总时段数', value: total, cls: '', action: 'status', status: '' },
+      { label: '危机时段数', value: crisis, cls: 'crisis', action: 'status', status: 'crisis' },
+      { label: '超标时段数', value: overloaded, cls: 'overloaded', action: 'status', status: 'overloaded' },
+      { label: '警戒时段数', value: warning, cls: 'warning', action: 'status', status: 'warning' },
+      { label: '无学生时段数', value: noStudent, cls: 'no-student', action: 'status', status: 'no-student' },
+      { label: '最高老师学生比', value: maxTeacherRatio > 0 ? `${fmtRatio(maxTeacherRatio)}:1` : '—', cls: '', action: 'record', record: maxTeacherRecord },
+      { label: '最高人手学生比', value: maxManpowerRatio > 0 ? `${fmtRatio(maxManpowerRatio)}:1` : '—', cls: '', action: 'record', record: maxManpowerRecord }
     ];
-    elSummary.innerHTML = cards.map((c) => `
-      <div class="card ${c.cls}">
+    elSummary.innerHTML = cards.map((c, idx) => `
+      <div class="card ${c.cls} clickable ${c.action === 'status' && state.filters.status === c.status ? 'active' : ''}"
+        data-summary-idx="${idx}" title="${c.action === 'status' ? '点击筛选对应时段' : '点击打开对应时段'}">
         <div class="label">${escapeHtml(c.label)}</div>
         <div class="value">${escapeHtml(String(c.value))}</div>
       </div>
     `).join('');
+    elSummary.querySelectorAll('[data-summary-idx]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const card = cards[parseInt(el.getAttribute('data-summary-idx'))];
+        if (!card) return;
+        if (card.action === 'status') {
+          state.filters.status = card.status;
+          elStatus.value = card.status;
+          rerender();
+        } else if (card.record) {
+          openSlotDetail(card.record);
+        }
+      });
+    });
   }
 
   function buildAxis() {
