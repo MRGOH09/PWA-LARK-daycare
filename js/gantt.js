@@ -1079,11 +1079,11 @@
     }));
   }
 
-  function monthlyTrendByTeacher(list, months) {
-    const teachers = unique(list.map((rec) => studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师'))
+  function monthlyTrendByGroup(list, months, field, fallback) {
+    const groups = unique(list.map((rec) => studentValue(rec, field) || fallback))
       .sort((a, b) => a.localeCompare(b, 'zh'));
-    return teachers.map((teacher) => {
-      const records = list.filter((rec) => (studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师') === teacher);
+    return groups.map((group) => {
+      const records = list.filter((rec) => (studentValue(rec, field) || fallback) === group);
       const counts = months.map((m) => records.filter((rec) => studentMonthValue(rec, m.month) === 'ACTIVE').length);
       const gained = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
         studentMonthValue(rec, months[idx - 1].month) !== 'ACTIVE' &&
@@ -1095,8 +1095,8 @@
       ).length);
       const latest = counts.length ? counts[counts.length - 1] : 0;
       const first = counts.length ? counts[0] : 0;
-      return { teacher, counts, gained, lost, latest, change: latest - first };
-    }).sort((a, b) => b.latest - a.latest || b.change - a.change || a.teacher.localeCompare(b.teacher, 'zh'));
+      return { group, counts, gained, lost, latest, change: latest - first };
+    }).sort((a, b) => b.latest - a.latest || b.change - a.change || a.group.localeCompare(b.group, 'zh'));
   }
 
   function deltaText(delta) {
@@ -1243,6 +1243,41 @@
     });
   }
 
+  function renderTrendGroupTable(title, label, rows, months) {
+    if (!rows.length) return '';
+    return `
+      <h4 class="student-trend-title">${escapeHtml(title)}</h4>
+      <div class="student-trend-wrap">
+        <table class="student-trend-table teacher-trend">
+          <thead>
+            <tr>
+              <th>${escapeHtml(label)}</th>
+              ${months.map((m) => `<th>${escapeHtml(m.label)}</th>`).join('')}
+              <th>首尾变化</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <th>${escapeHtml(row.group)}</th>
+                ${row.counts.map((count, idx) => {
+                  const prev = idx === 0 ? null : row.counts[idx - 1];
+                  const delta = prev === null ? null : count - prev;
+                  return `<td>
+                    <strong>${escapeHtml(String(count))}</strong>
+                    <span class="trend-delta ${deltaClass(delta)}">${escapeHtml(deltaText(delta))}</span>
+                    <span class="trend-move-line">进 ${escapeHtml(row.gained[idx] === null ? '-' : String(row.gained[idx]))} / 停 ${escapeHtml(row.lost[idx] === null ? '-' : String(row.lost[idx]))}</span>
+                  </td>`;
+                }).join('')}
+                <td><span class="trend-delta ${deltaClass(row.change)}">${escapeHtml(deltaText(row.change))}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
   function renderStudentMonthlyTrend(list) {
     if (!elStudentMonthlyTrend) return;
     const months = activeStudentMonths(list);
@@ -1250,8 +1285,11 @@
       elStudentMonthlyTrend.innerHTML = '<div class="empty-state">没有月份状态数据。</div>';
       return;
     }
-    const teacherRows = monthlyTrendByTeacher(list, months);
+    const yearRows = monthlyTrendByGroup(list, months, STUDENT_FIELDS.year, '未填年级');
+    const campusRows = monthlyTrendByGroup(list, months, STUDENT_FIELDS.campus, '未填分院');
+    const teacherRows = monthlyTrendByGroup(list, months, STUDENT_FIELDS.teacher, '未填负责老师');
     elStudentMonthlyTrend.innerHTML = `
+      <h4 class="student-trend-title">整体表现</h4>
       <div class="student-trend-wrap">
         <table class="student-trend-table">
           <thead>
@@ -1288,34 +1326,9 @@
           </tbody>
         </table>
       </div>
-      <div class="student-trend-wrap">
-        <table class="student-trend-table teacher-trend">
-          <thead>
-            <tr>
-              <th>负责老师</th>
-              ${months.map((m) => `<th>${escapeHtml(m.label)}</th>`).join('')}
-              <th>首尾变化</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${teacherRows.map((row) => `
-              <tr>
-                <th>${escapeHtml(row.teacher)}</th>
-                ${row.counts.map((count, idx) => {
-                  const prev = idx === 0 ? null : row.counts[idx - 1];
-                  const delta = prev === null ? null : count - prev;
-                  return `<td>
-                    <strong>${escapeHtml(String(count))}</strong>
-                    <span class="trend-delta ${deltaClass(delta)}">${escapeHtml(deltaText(delta))}</span>
-                    <span class="trend-move-line">进 ${escapeHtml(row.gained[idx] === null ? '-' : String(row.gained[idx]))} / 停 ${escapeHtml(row.lost[idx] === null ? '-' : String(row.lost[idx]))}</span>
-                  </td>`;
-                }).join('')}
-                <td><span class="trend-delta ${deltaClass(row.change)}">${escapeHtml(deltaText(row.change))}</span></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
+      ${renderTrendGroupTable('年级表现', '年级', yearRows, months)}
+      ${renderTrendGroupTable('分院表现', '分院', campusRows, months)}
+      ${renderTrendGroupTable('负责老师表现', '负责老师', teacherRows, months)}
     `;
   }
 
