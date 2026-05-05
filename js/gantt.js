@@ -66,6 +66,7 @@
   const elRefresh = $('#refresh');
   const elReset = $('#reset');
   const elAddSlot = $('#add-slot');
+  const elAddStaff = $('#add-staff');
   const elGantt = $('#gantt-root');
   const elSummary = $('#summary');
   const elTeachersSummary = $('#teachers-summary');
@@ -703,6 +704,7 @@
   }
 
   function openCreateStaffModal(role) {
+    const selectedRole = role || state.filters.role || 'daycare';
     state.modalOpen = true;
     elModalRoot.innerHTML = `
       <div class="modal-backdrop" id="modal-backdrop">
@@ -711,7 +713,9 @@
           <form class="edit-form" id="create-staff-form">
             <div class="tag-field">
               <div class="tag-field-title">角色</div>
-              <span class="role-pill ${role}">${escapeHtml(ROLE_LABEL[role])}</span>
+              <select name="role">
+                ${ROLE_KEYS.map((key) => `<option value="${key}" ${key === selectedRole ? 'selected' : ''}>${escapeHtml(ROLE_LABEL[key])}</option>`).join('')}
+              </select>
             </div>
             <label>姓名
               <input name="name" type="text" autocomplete="off" placeholder="输入新老师 / 助理名字" required />
@@ -732,7 +736,7 @@
     form.elements.name.focus();
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      saveCreateStaff(role, form.elements.name.value);
+      saveCreateStaff(form.elements.role.value, form.elements.name.value);
     });
   }
 
@@ -1477,6 +1481,7 @@
     });
     elRefresh.addEventListener('click', () => loadSchedule(false));
     elAddSlot.addEventListener('click', () => openScheduleEditor(defaultNewRecord(), 'new'));
+    elAddStaff.addEventListener('click', () => openCreateStaffModal(state.filters.role || ''));
     elReset.addEventListener('click', () => {
       state.filters = { day: '', block: '', role: '', teacher: '', status: '' };
       syncFilterControls();
