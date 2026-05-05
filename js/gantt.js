@@ -1067,7 +1067,15 @@
     const visible = rows.filter((row) => row.active || row.stopped || row.archived);
     return visible.map((row, idx) => ({
       ...row,
-      delta: idx === 0 ? null : row.active - visible[idx - 1].active
+      delta: idx === 0 ? null : row.active - visible[idx - 1].active,
+      gained: idx === 0 ? null : list.filter((rec) =>
+        studentMonthValue(rec, visible[idx - 1].month) !== 'ACTIVE' &&
+        studentMonthValue(rec, row.month) === 'ACTIVE'
+      ).length,
+      lost: idx === 0 ? null : list.filter((rec) =>
+        studentMonthValue(rec, visible[idx - 1].month) === 'ACTIVE' &&
+        studentMonthValue(rec, row.month) !== 'ACTIVE'
+      ).length
     }));
   }
 
@@ -1077,9 +1085,17 @@
     return teachers.map((teacher) => {
       const records = list.filter((rec) => (studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师') === teacher);
       const counts = months.map((m) => records.filter((rec) => studentMonthValue(rec, m.month) === 'ACTIVE').length);
+      const gained = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
+        studentMonthValue(rec, months[idx - 1].month) !== 'ACTIVE' &&
+        studentMonthValue(rec, m.month) === 'ACTIVE'
+      ).length);
+      const lost = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
+        studentMonthValue(rec, months[idx - 1].month) === 'ACTIVE' &&
+        studentMonthValue(rec, m.month) !== 'ACTIVE'
+      ).length);
       const latest = counts.length ? counts[counts.length - 1] : 0;
       const first = counts.length ? counts[0] : 0;
-      return { teacher, counts, latest, change: latest - first };
+      return { teacher, counts, gained, lost, latest, change: latest - first };
     }).sort((a, b) => b.latest - a.latest || b.change - a.change || a.teacher.localeCompare(b.teacher, 'zh'));
   }
 
@@ -1254,6 +1270,14 @@
               ${months.map((m) => `<td><span class="trend-delta ${deltaClass(m.delta)}">${escapeHtml(deltaText(m.delta))}</span></td>`).join('')}
             </tr>
             <tr>
+              <th>进步人数</th>
+              ${months.map((m) => `<td><span class="trend-move gained">${escapeHtml(m.gained === null ? '-' : String(m.gained))}</span></td>`).join('')}
+            </tr>
+            <tr>
+              <th>停步人数</th>
+              ${months.map((m) => `<td><span class="trend-move lost">${escapeHtml(m.lost === null ? '-' : String(m.lost))}</span></td>`).join('')}
+            </tr>
+            <tr>
               <th>Stop</th>
               ${months.map((m) => `<td>${escapeHtml(String(m.stopped))}</td>`).join('')}
             </tr>
@@ -1280,7 +1304,11 @@
                 ${row.counts.map((count, idx) => {
                   const prev = idx === 0 ? null : row.counts[idx - 1];
                   const delta = prev === null ? null : count - prev;
-                  return `<td><strong>${escapeHtml(String(count))}</strong><span class="trend-delta ${deltaClass(delta)}">${escapeHtml(deltaText(delta))}</span></td>`;
+                  return `<td>
+                    <strong>${escapeHtml(String(count))}</strong>
+                    <span class="trend-delta ${deltaClass(delta)}">${escapeHtml(deltaText(delta))}</span>
+                    <span class="trend-move-line">进 ${escapeHtml(row.gained[idx] === null ? '-' : String(row.gained[idx]))} / 停 ${escapeHtml(row.lost[idx] === null ? '-' : String(row.lost[idx]))}</span>
+                  </td>`;
                 }).join('')}
                 <td><span class="trend-delta ${deltaClass(row.change)}">${escapeHtml(deltaText(row.change))}</span></td>
               </tr>
