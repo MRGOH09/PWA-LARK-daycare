@@ -114,7 +114,10 @@ def fetch_all_records(token, env, table_id=None):
         resp.raise_for_status()
         data = resp.json()
         if data.get("code") != 0:
-            raise RuntimeError(f"Lark records error: {data.get('msg', 'unknown')}")
+            msg = data.get("msg", "unknown")
+            if msg == "RolePermNotAllow":
+                raise RuntimeError("Lark 拒绝读取这张表：请确认 App 已被授权访问该 Base/Table，并有读取记录权限")
+            raise RuntimeError(f"Lark records error: {msg}")
         block = data.get("data", {}) or {}
         out.extend(block.get("items") or [])
         if not block.get("has_more"):
