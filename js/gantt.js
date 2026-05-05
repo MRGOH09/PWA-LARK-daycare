@@ -1116,6 +1116,39 @@
     return { group, counts, gained, lost, latest, change: latest - first };
   }
 
+  function lostStudentsForMonth(records, months, idx) {
+    if (idx <= 0 || !months[idx - 1] || !months[idx]) return [];
+    const prevMonth = months[idx - 1].month;
+    const month = months[idx].month;
+    return records.filter((rec) =>
+      studentMonthValue(rec, prevMonth) === 'ACTIVE' &&
+      studentMonthValue(rec, month) !== 'ACTIVE'
+    );
+  }
+
+  function recordsForGroup(records, label, group) {
+    if (label === '负责老师') {
+      return records.filter((rec) => (studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师') === group);
+    }
+    if (label === '分院') {
+      return records.filter((rec) => (studentValue(rec, STUDENT_FIELDS.campus) || '未填分院') === group);
+    }
+    if (label === '年级') {
+      if (group === '总小学人数') return records.filter((rec) => PRIMARY_YEARS.includes(normalizedStudentYear(rec)));
+      if (group === '总中学人数') return records.filter((rec) => SECONDARY_YEARS.includes(normalizedStudentYear(rec)));
+      return records.filter((rec) => normalizedStudentYear(rec) === group);
+    }
+    return records;
+  }
+
+  function stopListButton(count, attrs) {
+    if (count === null || count === undefined) return '-';
+    const attrText = Object.entries(attrs)
+      .map(([key, value]) => `data-${key}="${escapeHtml(String(value))}"`)
+      .join(' ');
+    return `<button class="trend-stop-link" type="button" ${attrText}>${escapeHtml(String(count))}</button>`;
+  }
+
   function monthlyTrendByGroup(list, months, field, fallback) {
     const groups = unique(list.map((rec) => studentValue(rec, field) || fallback))
       .sort((a, b) => a.localeCompare(b, 'zh'));
@@ -1321,7 +1354,7 @@
           <tbody>
             <tr>
               <th>Active</th>
-              ${months.map((m) => `<td><strong>${escapeHtml(String(m.active))}</strong><span class="trend-delta ${deltaClass(m.delta)}">${escapeHtml(deltaText(m.delta))}</span><span class="trend-move-line">进 ${escapeHtml(m.gained === null ? '-' : String(m.gained))} / 停 ${escapeHtml(m.lost === null ? '-' : String(m.lost))}</span></td>`).join('')}
+              ${months.map((m, idx) => `<td><strong>${escapeHtml(String(m.active))}</strong><span class="trend-delta ${deltaClass(m.delta)}">${escapeHtml(deltaText(m.delta))}</span><span class="trend-move-line">进 ${escapeHtml(m.gained === null ? '-' : String(m.gained))} / 停 ${stopListButton(m.lost, { stopScope: 'analysisOverall', stopMonthIndex: idx })}</span></td>`).join('')}
             </tr>
             <tr>
               <th>Stop</th>
@@ -1385,6 +1418,7 @@
       </div>
     `;
     bindModalCommon();
+    bindStopListButtons(elModalRoot, records, months);
     const filterBtn = document.getElementById('student-analysis-filter');
     if (filterBtn) {
       filterBtn.addEventListener('click', () => {
@@ -1393,6 +1427,71 @@
         renderStudentsView();
       });
     }
+  }
+
+  function bindStopListButtons(root, baseRecords, months) {
+    if (!root) return;
+    root.querySelectorAll('[data-stop-month-index]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-stop-month-index'));
+        if (!isFinite(idx)) return;
+        const label = btn.getAttribute('data-stop-group-label') || '';
+        const group = btn.getAttribute('data-stop-group') || '';
+        const scopedRecords = group ? recordsForGroup(baseRecords, label, group) : baseRecords;
+        const lost = lostStudentsForMonth(scopedRecords, months, idx);
+        const month = months[idx];
+        const prevMonth = months[idx - 1];
+        const title = `${group || '全部学生'} · ${prevMonth ? prevMonth.label : '-'} 到 ${month ? month.label : '-'} 停步名单`;
+        openStudentStopList(title, lost, prevMonth, month);
+      });
+    });
+  }
+
+  function openStudentStopList(title, records, prevMonth, month) {
+    const rows = records
+      .slice()
+      .sort((a, b) =>
+        studentValue(a, STUDENT_FIELDS.teacher).localeCompare(studentValue(b, STUDENT_FIELDS.teacher), 'zh') ||
+        normalizedStudentYear(a).localeCompare(normalizedStudentYear(b), 'zh') ||
+        studentValue(a, STUDENT_FIELDS.name).localeCompare(studentValue(b, STUDENT_FIELDS.name), 'zh')
+      )
+      .map((rec) => `
+        <tr>
+          <td><strong>${escapeHtml(studentValue(rec, STUDENT_FIELDS.name) || '-')}</strong></td>
+          <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.teacher) || '-')}</td>
+          <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.year) || '-')}</td>
+          <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.campus) || '-')}</td>
+          <td>${escapeHtml(prevMonth ? studentValue(rec, prevMonth.month) || '-' : '-')}</td>
+          <td>${escapeHtml(month ? studentValue(rec, month.month) || '空' : '-')}</td>
+        </tr>
+      `).join('');
+
+    state.modalOpen = true;
+    elModalRoot.innerHTML = `
+      <div class="modal-backdrop" id="modal-backdrop">
+        <div class="modal wide" role="dialog" aria-modal="true">
+          <h2>${escapeHtml(title)}</h2>
+          <div class="student-analysis-grid" style="margin-bottom:12px;">
+            <div class="role-modal-metric"><span>停步人数</span><b>${records.length}</b></div>
+            <div class="role-modal-metric"><span>上个月</span><b>${escapeHtml(prevMonth ? prevMonth.label : '-')}</b></div>
+            <div class="role-modal-metric"><span>这个月</span><b>${escapeHtml(month ? month.label : '-')}</b></div>
+          </div>
+          <div class="students-table-wrap modal-student-list">
+            <table class="students-table">
+              <thead>
+                <tr><th>学生</th><th>负责老师</th><th>年级</th><th>分院</th><th>上月</th><th>本月</th></tr>
+              </thead>
+              <tbody>${rows || '<tr><td colspan="6" class="empty-state">没有停步学生。</td></tr>'}</tbody>
+            </table>
+          </div>
+          <div class="actions">
+            <button id="modal-close" type="button">关闭</button>
+          </div>
+        </div>
+      </div>
+    `;
+    bindModalCommon();
   }
 
   function renderTrendGroupTable(title, label, rows, months) {
@@ -1421,7 +1520,10 @@
                   return `<td>
                     <strong>${escapeHtml(String(count))}</strong>
                     <span class="trend-delta ${deltaClass(delta)}">${escapeHtml(deltaText(delta))}</span>
-                    <span class="trend-move-line">进 ${escapeHtml(row.gained[idx] === null ? '-' : String(row.gained[idx]))} / 停 ${escapeHtml(row.lost[idx] === null ? '-' : String(row.lost[idx]))}</span>
+                    <span class="trend-move-line">
+                      进 ${escapeHtml(row.gained[idx] === null ? '-' : String(row.gained[idx]))}
+                      / 停 ${stopListButton(row.lost[idx], { stopGroupLabel: label, stopGroup: row.group, stopMonthIndex: idx })}
+                    </span>
                   </td>`;
                 }).join('')}
                 <td><span class="trend-delta ${deltaClass(row.change)}">${escapeHtml(deltaText(row.change))}</span></td>
@@ -1468,7 +1570,7 @@
             </tr>
             <tr>
               <th>停步人数</th>
-              ${months.map((m) => `<td><span class="trend-move lost">${escapeHtml(m.lost === null ? '-' : String(m.lost))}</span></td>`).join('')}
+              ${months.map((m, idx) => `<td><span class="trend-move lost">${stopListButton(m.lost, { stopScope: 'overall', stopMonthIndex: idx })}</span></td>`).join('')}
             </tr>
             <tr>
               <th>Stop</th>
@@ -1488,6 +1590,7 @@
     elStudentMonthlyTrend.querySelectorAll('[data-student-teacher-analysis]').forEach((btn) => {
       btn.addEventListener('click', () => openStudentTeacherAnalysis(btn.getAttribute('data-student-teacher-analysis') || ''));
     });
+    bindStopListButtons(elStudentMonthlyTrend, state.students, months);
   }
 
   function renderStudentsView() {
