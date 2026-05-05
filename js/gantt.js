@@ -4,6 +4,7 @@
   const AXIS_START = 420;
   const AXIS_END = 1320;
   const AUTO_REFRESH_MS = 30 * 1000;
+  const STUDENTS_CACHE_KEY = 'daycare-students-cache-v1';
   const DEFAULT_TEACHER_THRESHOLD = 30;
   const DEFAULT_MANPOWER_THRESHOLD = 15;
   const DAY_LABELS = {
@@ -1382,6 +1383,43 @@
     elStudentsMeta.textContent = `名单显示 ${list.length}/${state.students.length} · 来源字段 ${state.studentColumns.length} 个`;
   }
 
+  function applyStudentsPayload(data) {
+    state.students = data.records || [];
+    state.studentColumns = data.columns || [];
+    state.studentUpdatedAt = data.updatedAt || null;
+    state.lastStudentsHash = String(data.count || 0) + '|' + (data.updatedAt || '');
+    renderStudentsView();
+  }
+
+  function saveStudentsCache(data) {
+    try {
+      localStorage.setItem(STUDENTS_CACHE_KEY, JSON.stringify({
+        savedAt: Date.now(),
+        data: {
+          success: true,
+          updatedAt: data.updatedAt || null,
+          count: data.count || 0,
+          columns: data.columns || [],
+          records: data.records || []
+        }
+      }));
+    } catch {}
+  }
+
+  function loadStudentsCache() {
+    try {
+      const raw = localStorage.getItem(STUDENTS_CACHE_KEY);
+      if (!raw) return false;
+      const cached = JSON.parse(raw);
+      if (!cached || !cached.data || !cached.data.records) return false;
+      applyStudentsPayload(cached.data);
+      elStudentsMeta.textContent = `先显示本机缓存 ${state.students.length} 条 · 正在更新最新名单…`;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /* ============================================================
      DETAIL MODALS
   ============================================================ */
@@ -1910,9 +1948,12 @@
     }
   }
 
-  async function loadStudents(initial) {
+  async function loadStudents(initial, forceRefresh = false) {
     try {
-      const resp = await fetch('/api/students?t=' + Date.now(), { cache: 'no-store' });
+      if (initial && !state.students.length) loadStudentsCache();
+      const params = new URLSearchParams({ t: String(Date.now()) });
+      if (forceRefresh) params.set('refresh', '1');
+      const resp = await fetch('/api/students?' + params.toString(), { cache: 'no-store' });
       const text = await resp.text();
       let data;
       try { data = JSON.parse(text); } catch { throw new Error('返回非 JSON 数据'); }
@@ -1920,14 +1961,13 @@
 
       const hash = String(data.count || 0) + '|' + (data.updatedAt || '');
       if (hash === state.lastStudentsHash && !initial) return;
-      state.lastStudentsHash = hash;
-      state.students = data.records || [];
-      state.studentColumns = data.columns || [];
-      state.studentUpdatedAt = data.updatedAt || null;
-      renderStudentsView();
+      applyStudentsPayload(data);
+      saveStudentsCache(data);
     } catch (err) {
       elStudentsMeta.textContent = `学生名单加载失败：${err.message}`;
-      elStudentsTable.querySelector('tbody').innerHTML = `<tr><td class="error-state">无法读取学生名单：${escapeHtml(err.message)}</td></tr>`;
+      if (!state.students.length) {
+        elStudentsTable.querySelector('tbody').innerHTML = `<tr><td class="error-state">无法读取学生名单：${escapeHtml(err.message)}</td></tr>`;
+      }
     }
   }
 
@@ -1961,7 +2001,7 @@
       rerender();
     });
     elRefresh.addEventListener('click', () => {
-      if (state.view === 'students') loadStudents(false);
+      if (state.view === 'students') loadStudents(false, true);
       else loadSchedule(false);
     });
     elAddSlot.addEventListener('click', () => openScheduleEditor(defaultNewRecord(), 'new'));
