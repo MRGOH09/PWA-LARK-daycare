@@ -1027,6 +1027,18 @@
     return items.slice(0, 3).map(([key, count]) => `${key} ${count}`).join('、') || '-';
   }
 
+  function countMap(records, field, fallback = '未填') {
+    const map = new Map();
+    for (const rec of records) incrementCount(map, studentValue(rec, field) || fallback);
+    return map;
+  }
+
+  function countByYearGroups(records) {
+    const primary = records.filter((rec) => PRIMARY_YEARS.includes(normalizedStudentYear(rec))).length;
+    const secondary = records.filter((rec) => SECONDARY_YEARS.includes(normalizedStudentYear(rec))).length;
+    return { primary, secondary };
+  }
+
   function computeStudentTeacherSummary(list) {
     const map = new Map();
     for (const rec of list) {
@@ -1278,10 +1290,109 @@
     `;
     elStudentTeacherSummary.querySelectorAll('[data-student-teacher]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        state.studentFilters.teacher = btn.getAttribute('data-student-teacher') || '';
-        renderStudentsView();
+        openStudentTeacherAnalysis(btn.getAttribute('data-student-teacher') || '');
       });
     });
+  }
+
+  function openStudentTeacherAnalysis(teacher) {
+    const teacherName = teacher || '未填负责老师';
+    const records = state.students.filter((rec) => (studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师') === teacherName);
+    if (!records.length) return;
+    const months = activeStudentMonths(records);
+    const active = records.filter((rec) => !isStoppedStudent(rec)).length;
+    const stopped = records.length - active;
+    const noWeekday = records.filter((rec) => !studentWeekdays(rec).length).length;
+    const noTime = records.filter((rec) => !studentValue(rec, STUDENT_FIELDS.time)).length;
+    const noYear = records.filter((rec) => !studentValue(rec, STUDENT_FIELDS.year)).length;
+    const noMonthStatus = records.filter((rec) => !studentMonthStatuses(rec).length).length;
+    const yearGroups = countByYearGroups(records);
+    const yearRows = monthlyTrendByYear(records, months);
+    const campusRows = monthlyTrendByGroup(records, months, STUDENT_FIELDS.campus, '未填分院');
+    const monthHtml = months.length ? `
+      <div class="student-trend-wrap">
+        <table class="student-trend-table teacher-trend">
+          <thead>
+            <tr>
+              <th>月份</th>
+              ${months.map((m) => `<th>${escapeHtml(m.label)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>Active</th>
+              ${months.map((m) => `<td><strong>${escapeHtml(String(m.active))}</strong><span class="trend-delta ${deltaClass(m.delta)}">${escapeHtml(deltaText(m.delta))}</span><span class="trend-move-line">进 ${escapeHtml(m.gained === null ? '-' : String(m.gained))} / 停 ${escapeHtml(m.lost === null ? '-' : String(m.lost))}</span></td>`).join('')}
+            </tr>
+            <tr>
+              <th>Stop</th>
+              ${months.map((m) => `<td>${escapeHtml(String(m.stopped))}</td>`).join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    ` : '<div class="empty-state">没有月份状态数据。</div>';
+    const studentRows = records
+      .slice()
+      .sort((a, b) =>
+        normalizedStudentYear(a).localeCompare(normalizedStudentYear(b), 'zh') ||
+        studentValue(a, STUDENT_FIELDS.name).localeCompare(studentValue(b, STUDENT_FIELDS.name), 'zh')
+      )
+      .map((rec) => `
+        <tr>
+          <td><strong>${escapeHtml(studentValue(rec, STUDENT_FIELDS.name) || '-')}</strong></td>
+          <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.year) || '-')}</td>
+          <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.campus) || '-')}</td>
+          <td>${escapeHtml(studentWeekdays(rec).join('、') || '-')}</td>
+          <td>${isStoppedStudent(rec) ? `<span class="student-status stopped">Stop ${escapeHtml(stopMonthLabel(rec))}</span>` : '<span class="student-status active">Active</span>'}</td>
+        </tr>
+      `).join('');
+
+    state.modalOpen = true;
+    elModalRoot.innerHTML = `
+      <div class="modal-backdrop" id="modal-backdrop">
+        <div class="modal wide" role="dialog" aria-modal="true">
+          <h2>${escapeHtml(teacherName)} · 负责学生分析</h2>
+          <div class="student-analysis-grid">
+            <div class="role-modal-metric"><span>总学生</span><b>${records.length}</b></div>
+            <div class="role-modal-metric"><span>Active</span><b>${active}</b></div>
+            <div class="role-modal-metric"><span>Stop</span><b>${stopped}</b></div>
+            <div class="role-modal-metric"><span>小学</span><b>${yearGroups.primary}</b></div>
+            <div class="role-modal-metric"><span>中学</span><b>${yearGroups.secondary}</b></div>
+            <div class="role-modal-metric"><span>无星期</span><b>${noWeekday}</b></div>
+          </div>
+          <dl style="margin-top:12px;">
+            <dt>分院结构</dt><dd>${escapeHtml(topCountLabel(countMap(records, STUDENT_FIELDS.campus)))}</dd>
+            <dt>年级结构</dt><dd>${escapeHtml(topCountLabel(countMap(records, STUDENT_FIELDS.year)))}</dd>
+            <dt>时间段</dt><dd>${escapeHtml(topCountLabel(countMap(records, STUDENT_FIELDS.time)))}</dd>
+            <dt>提醒</dt><dd>${escapeHtml(`无时间 ${noTime} · 无年级 ${noYear} · 无月份状态 ${noMonthStatus}`)}</dd>
+          </dl>
+          <h3 class="student-trend-title">每月表现</h3>
+          ${monthHtml}
+          ${renderTrendGroupTable('年级结构变化', '年级', yearRows, months)}
+          ${renderTrendGroupTable('分院结构变化', '分院', campusRows, months)}
+          <h3 class="student-trend-title">学生名单（${records.length}）</h3>
+          <div class="students-table-wrap modal-student-list">
+            <table class="students-table">
+              <thead><tr><th>学生</th><th>年级</th><th>分院</th><th>星期</th><th>状态</th></tr></thead>
+              <tbody>${studentRows}</tbody>
+            </table>
+          </div>
+          <div class="actions split">
+            <button id="student-analysis-filter" type="button">查看这位老师学生名单</button>
+            <button id="modal-close" type="button">关闭</button>
+          </div>
+        </div>
+      </div>
+    `;
+    bindModalCommon();
+    const filterBtn = document.getElementById('student-analysis-filter');
+    if (filterBtn) {
+      filterBtn.addEventListener('click', () => {
+        state.studentFilters.teacher = teacherName === '未填负责老师' ? '' : teacherName;
+        closeModal();
+        renderStudentsView();
+      });
+    }
   }
 
   function renderTrendGroupTable(title, label, rows, months) {
@@ -1300,7 +1411,10 @@
           <tbody>
             ${rows.map((row) => `
               <tr class="${row.group.startsWith('总') ? 'trend-total-row' : ''}">
-                <th>${escapeHtml(row.group)}</th>
+                <th>${label === '负责老师'
+                  ? `<button class="trend-link" type="button" data-student-teacher-analysis="${escapeHtml(row.group === '未填负责老师' ? '' : row.group)}">${escapeHtml(row.group)}</button>`
+                  : escapeHtml(row.group)}
+                </th>
                 ${row.counts.map((count, idx) => {
                   const prev = idx === 0 ? null : row.counts[idx - 1];
                   const delta = prev === null ? null : count - prev;
@@ -1371,6 +1485,9 @@
       ${renderTrendGroupTable('分院表现', '分院', campusRows, months)}
       ${renderTrendGroupTable('负责老师表现', '负责老师', teacherRows, months)}
     `;
+    elStudentMonthlyTrend.querySelectorAll('[data-student-teacher-analysis]').forEach((btn) => {
+      btn.addEventListener('click', () => openStudentTeacherAnalysis(btn.getAttribute('data-student-teacher-analysis') || ''));
+    });
   }
 
   function renderStudentsView() {

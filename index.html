@@ -951,6 +951,18 @@
   .student-trend-table .trend-total-row th {
     color: var(--accent);
   }
+  .trend-link {
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    padding: 0;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .trend-link:hover {
+    text-decoration: underline;
+  }
   .teacher-trend td strong {
     display: block;
   }
@@ -993,6 +1005,14 @@
     color: var(--muted);
     font-size: 11px;
     font-weight: 700;
+  }
+  .student-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .modal-student-list {
+    max-height: 300px;
   }
 
   .role-pill {
@@ -1281,7 +1301,8 @@
   @media (max-width: 720px) {
     .edit-grid { grid-template-columns: 1fr; }
     .role-modal-grid,
-    .role-modal-columns { grid-template-columns: 1fr; }
+    .role-modal-columns,
+    .student-analysis-grid { grid-template-columns: 1fr; }
     .teachers-table th, .teachers-table td { padding: 6px 6px; font-size: 12px; }
     .teachers-table td.bar-cell { width: 120px; }
     .role-workload-grid { grid-template-columns: 1fr; }
