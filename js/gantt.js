@@ -59,6 +59,9 @@
     '1. JAN', '2. FEB', '3. MAR', '4. APR', '5. MAY', '6. JUNE',
     '7. JULY', '8. AUG', '9. SEP', '10. OCT', '11. NOV', '12. DEC'
   ];
+  const PRIMARY_YEARS = ['PA', 'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6'];
+  const SECONDARY_YEARS = ['F1', 'F2', 'F3', 'F4', 'F5'];
+  const FIXED_YEAR_ORDER = [...PRIMARY_YEARS, ...SECONDARY_YEARS];
 
   const state = {
     records: [],
@@ -1057,6 +1060,10 @@
     return studentValue(rec, month).toUpperCase();
   }
 
+  function normalizedStudentYear(rec) {
+    return studentValue(rec, STUDENT_FIELDS.year).toUpperCase();
+  }
+
   function activeStudentMonths(list) {
     const rows = STUDENT_MONTHS.map((month) => {
       const active = list.filter((rec) => studentMonthValue(rec, month) === 'ACTIVE').length;
@@ -1079,24 +1086,46 @@
     }));
   }
 
+  function monthlyTrendRow(group, records, months) {
+    const counts = months.map((m) => records.filter((rec) => studentMonthValue(rec, m.month) === 'ACTIVE').length);
+    const gained = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
+      studentMonthValue(rec, months[idx - 1].month) !== 'ACTIVE' &&
+      studentMonthValue(rec, m.month) === 'ACTIVE'
+    ).length);
+    const lost = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
+      studentMonthValue(rec, months[idx - 1].month) === 'ACTIVE' &&
+      studentMonthValue(rec, m.month) !== 'ACTIVE'
+    ).length);
+    const latest = counts.length ? counts[counts.length - 1] : 0;
+    const first = counts.length ? counts[0] : 0;
+    return { group, counts, gained, lost, latest, change: latest - first };
+  }
+
   function monthlyTrendByGroup(list, months, field, fallback) {
     const groups = unique(list.map((rec) => studentValue(rec, field) || fallback))
       .sort((a, b) => a.localeCompare(b, 'zh'));
     return groups.map((group) => {
       const records = list.filter((rec) => (studentValue(rec, field) || fallback) === group);
-      const counts = months.map((m) => records.filter((rec) => studentMonthValue(rec, m.month) === 'ACTIVE').length);
-      const gained = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
-        studentMonthValue(rec, months[idx - 1].month) !== 'ACTIVE' &&
-        studentMonthValue(rec, m.month) === 'ACTIVE'
-      ).length);
-      const lost = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
-        studentMonthValue(rec, months[idx - 1].month) === 'ACTIVE' &&
-        studentMonthValue(rec, m.month) !== 'ACTIVE'
-      ).length);
-      const latest = counts.length ? counts[counts.length - 1] : 0;
-      const first = counts.length ? counts[0] : 0;
-      return { group, counts, gained, lost, latest, change: latest - first };
+      return monthlyTrendRow(group, records, months);
     }).sort((a, b) => b.latest - a.latest || b.change - a.change || a.group.localeCompare(b.group, 'zh'));
+  }
+
+  function monthlyTrendByYear(list, months) {
+    const primaryRecords = list.filter((rec) => PRIMARY_YEARS.includes(normalizedStudentYear(rec)));
+    const secondaryRecords = list.filter((rec) => SECONDARY_YEARS.includes(normalizedStudentYear(rec)));
+    const rows = [
+      monthlyTrendRow('总小学人数', primaryRecords, months),
+      ...PRIMARY_YEARS.map((year) => monthlyTrendRow(year, list.filter((rec) => normalizedStudentYear(rec) === year), months)),
+      monthlyTrendRow('总中学人数', secondaryRecords, months),
+      ...SECONDARY_YEARS.map((year) => monthlyTrendRow(year, list.filter((rec) => normalizedStudentYear(rec) === year), months))
+    ];
+    const known = new Set(FIXED_YEAR_ORDER);
+    const otherYears = unique(list.map(normalizedStudentYear).filter((year) => year && !known.has(year)))
+      .sort((a, b) => a.localeCompare(b, 'zh'));
+    return [
+      ...rows,
+      ...otherYears.map((year) => monthlyTrendRow(year, list.filter((rec) => normalizedStudentYear(rec) === year), months))
+    ];
   }
 
   function deltaText(delta) {
@@ -1114,7 +1143,11 @@
   function renderStudentFilterOptions() {
     const values = (field) => unique(state.students.map((rec) => studentValue(rec, field)).filter(Boolean))
       .sort((a, b) => a.localeCompare(b, 'zh'));
-    fillSelectWithAll(elStudentYear, values(STUDENT_FIELDS.year), state.studentFilters.year, '全部年级');
+    const years = unique([
+      ...FIXED_YEAR_ORDER,
+      ...values(STUDENT_FIELDS.year).map((year) => year.toUpperCase()).filter((year) => !FIXED_YEAR_ORDER.includes(year))
+    ]);
+    fillSelectWithAll(elStudentYear, years, state.studentFilters.year, '全部年级');
     fillSelectWithAll(elStudentTeacher, values(STUDENT_FIELDS.teacher), state.studentFilters.teacher, '全部老师');
     fillSelectWithAll(elStudentTime, values(STUDENT_FIELDS.time), state.studentFilters.time, '全部时间段');
     fillSelectWithAll(elStudentCampus, values(STUDENT_FIELDS.campus), state.studentFilters.campus, '全部分院');
@@ -1125,7 +1158,7 @@
     const f = state.studentFilters;
     return state.students.filter((rec) => {
       if (q && !Object.values(rec.fields || {}).some((value) => String(value || '').toLowerCase().includes(q))) return false;
-      if (f.year && studentValue(rec, STUDENT_FIELDS.year) !== f.year) return false;
+      if (f.year && normalizedStudentYear(rec) !== f.year) return false;
       if (f.teacher && studentValue(rec, STUDENT_FIELDS.teacher) !== f.teacher) return false;
       if (f.time && studentValue(rec, STUDENT_FIELDS.time) !== f.time) return false;
       if (f.campus && studentValue(rec, STUDENT_FIELDS.campus) !== f.campus) return false;
@@ -1258,7 +1291,7 @@
           </thead>
           <tbody>
             ${rows.map((row) => `
-              <tr>
+              <tr class="${row.group.startsWith('总') ? 'trend-total-row' : ''}">
                 <th>${escapeHtml(row.group)}</th>
                 ${row.counts.map((count, idx) => {
                   const prev = idx === 0 ? null : row.counts[idx - 1];
@@ -1285,7 +1318,7 @@
       elStudentMonthlyTrend.innerHTML = '<div class="empty-state">没有月份状态数据。</div>';
       return;
     }
-    const yearRows = monthlyTrendByGroup(list, months, STUDENT_FIELDS.year, '未填年级');
+    const yearRows = monthlyTrendByYear(list, months);
     const campusRows = monthlyTrendByGroup(list, months, STUDENT_FIELDS.campus, '未填分院');
     const teacherRows = monthlyTrendByGroup(list, months, STUDENT_FIELDS.teacher, '未填负责老师');
     elStudentMonthlyTrend.innerHTML = `
