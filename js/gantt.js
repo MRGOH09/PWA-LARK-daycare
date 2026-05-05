@@ -42,6 +42,10 @@
   const state = {
     records: [],
     staffRoles: { daycare: [], teaching: [], assistant: [], assistantTeacher: [] },
+    students: [],
+    studentColumns: [],
+    studentUpdatedAt: null,
+    studentSearch: '',
     updatedAt: null,
     teacherThreshold: DEFAULT_TEACHER_THRESHOLD,
     manpowerThreshold: DEFAULT_MANPOWER_THRESHOLD,
@@ -50,6 +54,7 @@
     teacherView: 'overview',
     teacherSort: { key: 'hours', dir: 'desc' },
     lastPayloadHash: '',
+    lastStudentsHash: '',
     refreshTimer: null,
     modalOpen: false
   };
@@ -76,10 +81,15 @@
   const elTeachersTable = $('#teachers-table');
   const elTeachersHeatmap = $('#teachers-heatmap');
   const elTeachersWeeklySchedule = $('#teachers-weekly-schedule');
+  const elStudentsSummary = $('#students-summary');
+  const elStudentSearch = $('#student-search');
+  const elStudentsMeta = $('#students-meta');
+  const elStudentsTable = $('#students-table');
   const elMeta = $('#meta');
   const elModalRoot = $('#modal-root');
   const elViewGantt = $('#view-gantt');
   const elViewTeachers = $('#view-teachers');
+  const elViewStudents = $('#view-students');
 
   function escapeHtml(s) {
     if (s === null || s === undefined) return '';
@@ -929,6 +939,55 @@
   }
 
   /* ============================================================
+     STUDENTS VIEW
+  ============================================================ */
+
+  function filteredStudents() {
+    const q = state.studentSearch.trim().toLowerCase();
+    if (!q) return state.students;
+    return state.students.filter((rec) =>
+      Object.values(rec.fields || {}).some((value) => String(value || '').toLowerCase().includes(q))
+    );
+  }
+
+  function renderStudentsSummary(list) {
+    const cards = [
+      { label: '学生总数', value: state.students.length },
+      { label: '目前显示', value: list.length },
+      { label: '字段数', value: state.studentColumns.length },
+      { label: '更新时间', value: state.studentUpdatedAt || '-' }
+    ];
+    elStudentsSummary.innerHTML = cards.map((c) => `
+      <div class="card">
+        <div class="label">${escapeHtml(c.label)}</div>
+        <div class="value">${escapeHtml(String(c.value))}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderStudentsTable(list) {
+    const cols = state.studentColumns;
+    if (!cols.length) {
+      elStudentsTable.querySelector('thead').innerHTML = '';
+      elStudentsTable.querySelector('tbody').innerHTML = '<tr><td class="empty-state">没有学生记录。</td></tr>';
+      return;
+    }
+    elStudentsTable.querySelector('thead').innerHTML = `
+      <tr>${cols.map((col) => `<th>${escapeHtml(col)}</th>`).join('')}</tr>
+    `;
+    elStudentsTable.querySelector('tbody').innerHTML = list.map((rec) => `
+      <tr>${cols.map((col) => `<td>${escapeHtml(rec.fields[col] || '')}</td>`).join('')}</tr>
+    `).join('') || `<tr><td colspan="${cols.length}" class="empty-state">没有匹配的学生。</td></tr>`;
+  }
+
+  function renderStudentsView() {
+    const list = filteredStudents();
+    renderStudentsSummary(list);
+    renderStudentsTable(list);
+    elStudentsMeta.textContent = `学生表 ${state.students.length} 条记录 · ${state.studentColumns.length} 个字段`;
+  }
+
+  /* ============================================================
      DETAIL MODALS
   ============================================================ */
 
@@ -1400,12 +1459,15 @@
     state.view = view;
     elViewGantt.hidden = view !== 'gantt';
     elViewTeachers.hidden = view !== 'teachers';
+    elViewStudents.hidden = view !== 'students';
     document.querySelectorAll('.tabs button').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-view') === view);
     });
     document.querySelectorAll('[data-view-only]').forEach((el) => {
-      el.style.display = el.getAttribute('data-view-only') === view ? '' : 'none';
+      const views = el.getAttribute('data-view-only').split(/\s+/);
+      el.style.display = views.includes(view) ? '' : 'none';
     });
+    if (view === 'students' && !state.lastStudentsHash) loadStudents(true);
     rerender();
   }
 
@@ -1414,8 +1476,10 @@
     if (state.view === 'gantt') {
       renderSummary(filtered);
       renderGantt(filtered);
-    } else {
+    } else if (state.view === 'teachers') {
       renderTeachersView(filtered);
+    } else {
+      renderStudentsView();
     }
   }
 
@@ -1451,11 +1515,33 @@
     }
   }
 
+  async function loadStudents(initial) {
+    try {
+      const resp = await fetch('/api/students?t=' + Date.now(), { cache: 'no-store' });
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { throw new Error('返回非 JSON 数据'); }
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+
+      const hash = String(data.count || 0) + '|' + (data.updatedAt || '');
+      if (hash === state.lastStudentsHash && !initial) return;
+      state.lastStudentsHash = hash;
+      state.students = data.records || [];
+      state.studentColumns = data.columns || [];
+      state.studentUpdatedAt = data.updatedAt || null;
+      renderStudentsView();
+    } catch (err) {
+      elStudentsMeta.textContent = `学生名单加载失败：${err.message}`;
+      elStudentsTable.querySelector('tbody').innerHTML = `<tr><td class="error-state">无法读取学生名单：${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
   function startAutoRefresh() {
     stopAutoRefresh();
     state.refreshTimer = setInterval(() => {
       if (document.hidden || state.modalOpen) return;
-      loadSchedule(false);
+      if (state.view === 'students') loadStudents(false);
+      else loadSchedule(false);
     }, AUTO_REFRESH_MS);
   }
   function stopAutoRefresh() {
@@ -1479,7 +1565,10 @@
       state.manpowerThreshold = isFinite(v) && v > 0 ? v : DEFAULT_MANPOWER_THRESHOLD;
       rerender();
     });
-    elRefresh.addEventListener('click', () => loadSchedule(false));
+    elRefresh.addEventListener('click', () => {
+      if (state.view === 'students') loadStudents(false);
+      else loadSchedule(false);
+    });
     elAddSlot.addEventListener('click', () => openScheduleEditor(defaultNewRecord(), 'new'));
     elAddStaff.addEventListener('click', () => openCreateStaffModal(state.filters.role || ''));
     elReset.addEventListener('click', () => {
@@ -1498,6 +1587,12 @@
         });
       });
     }
+    if (elStudentSearch) {
+      elStudentSearch.addEventListener('input', () => {
+        state.studentSearch = elStudentSearch.value || '';
+        renderStudentsView();
+      });
+    }
   }
 
   function init() {
@@ -1507,7 +1602,10 @@
     loadSchedule(true);
     startAutoRefresh();
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) loadSchedule(false);
+      if (!document.hidden) {
+        if (state.view === 'students') loadStudents(false);
+        else loadSchedule(false);
+      }
     });
   }
 

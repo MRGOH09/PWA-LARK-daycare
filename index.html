@@ -665,6 +665,61 @@
     max-height: 70vh;
     overflow-y: auto;
   }
+  .students-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px 12px;
+  }
+  .students-search {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .students-search input {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    min-width: 260px;
+  }
+  .students-meta {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .students-table-wrap {
+    overflow: auto;
+    max-height: 72vh;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .students-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .students-table th,
+  .students-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    text-align: left;
+  }
+  .students-table th {
+    position: sticky;
+    top: 0;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .students-table tbody tr:hover { background: var(--panel-2); }
 
   .role-pill {
     display: inline-block;
@@ -956,6 +1011,8 @@
     .teachers-table th, .teachers-table td { padding: 6px 6px; font-size: 12px; }
     .teachers-table td.bar-cell { width: 120px; }
     .role-workload-grid { grid-template-columns: 1fr; }
+    .students-search,
+    .students-search input { width: 100%; min-width: 0; }
     .heatmap { grid-template-columns: 100px repeat(7, 1fr) 60px; font-size: 11px; }
     .heatmap .cell { padding: 4px 4px; }
     .weekly-schedule { grid-template-columns: 110px repeat(7, minmax(110px, 1fr)); font-size: 11px; }
@@ -991,16 +1048,17 @@
 <nav class="tabs" role="tablist">
   <button data-view="gantt" class="active" type="button">周排班 Gantt</button>
   <button data-view="teachers" type="button">老师工作量</button>
+  <button data-view="students" type="button">学生名单</button>
 </nav>
 
 <section class="filters">
-  <label>星期
+  <label data-view-only="gantt teachers">星期
     <select id="filter-day"><option value="">全部</option></select>
   </label>
-  <label>BLOCK
+  <label data-view-only="gantt teachers">BLOCK
     <select id="filter-block"><option value="">全部</option></select>
   </label>
-  <label>角色
+  <label data-view-only="gantt teachers">角色
     <select id="filter-role">
       <option value="">全部</option>
       <option value="daycare">DAYCARE老师</option>
@@ -1009,7 +1067,7 @@
       <option value="assistantTeacher">助教</option>
     </select>
   </label>
-  <label>老师
+  <label data-view-only="gantt teachers">老师
     <select id="filter-teacher"><option value="">全部</option></select>
   </label>
   <label data-view-only="gantt">状态
@@ -1031,7 +1089,7 @@
   <span class="spacer"></span>
   <button id="add-slot" type="button" data-view-only="gantt">新增时段</button>
   <button id="add-staff" type="button" data-view-only="teachers">新增人手</button>
-  <button id="reset" class="secondary" type="button">重置筛选</button>
+  <button id="reset" class="secondary" type="button" data-view-only="gantt teachers">重置筛选</button>
   <button id="refresh" type="button">刷新</button>
 </section>
 
@@ -1101,6 +1159,28 @@
         <div class="weekly-schedule-wrap">
           <div id="teachers-weekly-schedule"></div>
         </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ========== Students View ========== -->
+<div id="view-students" class="view-section" hidden>
+  <section class="summary" id="students-summary"></section>
+  <div class="students-toolbar">
+    <div class="students-search">
+      <input id="student-search" type="search" placeholder="搜索学生名单" autocomplete="off" />
+    </div>
+    <div class="students-meta" id="students-meta">尚未加载</div>
+  </div>
+  <section class="teachers-wrapper">
+    <div class="panel-card">
+      <h3>学生名单</h3>
+      <div class="students-table-wrap">
+        <table class="students-table" id="students-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </section>

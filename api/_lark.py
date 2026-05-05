@@ -6,6 +6,7 @@ import requests
 
 LARK_TOKEN_URL = "https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal"
 LARK_RECORDS_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps/{app}/tables/{table}/records"
+DEFAULT_STUDENT_TABLE_ID = "tblKaj1Jpd7JJ1LA"
 
 REQUIRED_ENV = ("LARK_APP_ID", "LARK_APP_SECRET", "LARK_BASE_TOKEN", "LARK_TABLE_ID")
 
@@ -54,6 +55,8 @@ def get_env():
     staff_table_id = os.environ.get("LARK_STAFF_TABLE_ID")
     if staff_table_id:
         env["LARK_STAFF_TABLE_ID"] = staff_table_id.strip()
+    student_table_id = os.environ.get("LARK_STUDENT_TABLE_ID")
+    env["LARK_STUDENT_TABLE_ID"] = student_table_id.strip() if student_table_id else DEFAULT_STUDENT_TABLE_ID
     return env
 
 
@@ -124,6 +127,13 @@ def fetch_all_records(token, env, table_id=None):
 
 def fetch_staff_records(token, env):
     table_id = env.get("LARK_STAFF_TABLE_ID")
+    if not table_id:
+        return []
+    return fetch_all_records(token, env, table_id=table_id)
+
+
+def fetch_student_records(token, env):
+    table_id = env.get("LARK_STUDENT_TABLE_ID")
     if not table_id:
         return []
     return fetch_all_records(token, env, table_id=table_id)
@@ -318,6 +328,14 @@ def normalize_staff_roles(items):
     for role_key in roles:
         roles[role_key].sort()
     return roles
+
+
+def normalize_generic_record(item):
+    fields = item.get("fields", {}) or {}
+    return {
+        "recordId": item.get("record_id", ""),
+        "fields": {key: extract_text(value) for key, value in fields.items()},
+    }
 
 
 def sanitize_fields(raw):
