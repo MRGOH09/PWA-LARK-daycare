@@ -55,6 +55,10 @@
     { key: 'THUR', label: '四' },
     { key: 'FRI', label: '五' }
   ];
+  const STUDENT_MONTHS = [
+    '1. JAN', '2. FEB', '3. MAR', '4. APR', '5. MAY', '6. JUNE',
+    '7. JULY', '8. AUG', '9. SEP', '10. OCT', '11. NOV', '12. DEC'
+  ];
 
   const state = {
     records: [],
@@ -987,6 +991,24 @@
     return Boolean(studentValue(rec, STUDENT_FIELDS.stopMonth));
   }
 
+  function studentMonthStatuses(rec) {
+    return STUDENT_MONTHS
+      .map((month) => ({ month, value: studentValue(rec, month) }))
+      .filter((item) => item.value);
+  }
+
+  function shortMonth(month) {
+    return month.replace(/^\d+\.\s*/, '');
+  }
+
+  function stopMonthLabel(rec) {
+    const stoppedMonths = studentMonthStatuses(rec)
+      .filter((item) => item.value.toUpperCase() === 'STOP')
+      .map((item) => shortMonth(item.month));
+    if (stoppedMonths.length) return stoppedMonths.join(', ');
+    return isStoppedStudent(rec) ? '已停止' : '';
+  }
+
   function renderStudentFilterOptions() {
     const values = (field) => unique(state.students.map((rec) => studentValue(rec, field)).filter(Boolean))
       .sort((a, b) => a.localeCompare(b, 'zh'));
@@ -1047,6 +1069,7 @@
         <th>时间段</th>
         <th>分院</th>
         <th>星期</th>
+        <th>月份状态</th>
         <th>状态</th>
         <th>备注</th>
       </tr>
@@ -1064,13 +1087,20 @@
             ${studentWeekdays(rec).map((day) => `<span>${escapeHtml(day)}</span>`).join('') || '<em>-</em>'}
           </div>
         </td>
+        <td>
+          <div class="student-month-badges">
+            ${studentMonthStatuses(rec).map((item) => `
+              <span class="${escapeHtml(item.value.toLowerCase())}" title="${escapeHtml(item.month)}">${escapeHtml(shortMonth(item.month))}</span>
+            `).join('') || '<em>-</em>'}
+          </div>
+        </td>
         <td>${isStoppedStudent(rec)
-          ? `<span class="student-status stopped">Stop ${escapeHtml(studentValue(rec, STUDENT_FIELDS.stopMonth))}</span>`
+          ? `<span class="student-status stopped">Stop ${escapeHtml(stopMonthLabel(rec))}</span>`
           : '<span class="student-status active">Active</span>'}
         </td>
         <td class="student-note">${escapeHtml(studentValue(rec, STUDENT_FIELDS.note) || '-')}</td>
       </tr>
-    `).join('') || '<tr><td colspan="9" class="empty-state">没有匹配的学生。</td></tr>';
+    `).join('') || '<tr><td colspan="10" class="empty-state">没有匹配的学生。</td></tr>';
   }
 
   function renderStudentsView() {
