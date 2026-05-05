@@ -156,6 +156,50 @@
   }
   .summary .card .label { font-size: 11px; color: var(--muted); }
   .summary .card .value { font-size: 22px; font-weight: 700; margin-top: 2px; }
+  .summary .card .value.small {
+    font-size: 15px;
+    line-height: 1.35;
+  }
+  .summary-rank {
+    display: grid;
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .summary-rank-row {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: center;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .summary-rank-row .rank-no {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-rank-row .rank-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 800;
+  }
+  .summary-rank-row .rank-value {
+    color: var(--accent);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-rank-row button.rank-name {
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+  .summary-rank-row button.rank-name:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
   .summary .card.crisis .value { color: var(--status-crisis); }
   .summary .card.overloaded .value { color: var(--status-overloaded); }
   .summary .card.warning .value { color: var(--status-warning); }

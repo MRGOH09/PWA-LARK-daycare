@@ -1626,23 +1626,63 @@
   function renderStopsSummary(events, baseCount) {
     if (!elStopsSummary) return;
     const students = new Set(events.map((event) => event.rec.recordId || event.name));
-    const teachers = countMap(events.map((event) => event.rec), STUDENT_FIELDS.teacher, '未填负责老师');
     const monthCounts = new Map();
-    for (const event of events) incrementCount(monthCounts, event.monthLabel);
-    const cards = [
-      { label: '停步事件', value: pctText(events.length, baseCount) },
-      { label: '涉及学生', value: students.size },
-      { label: '涉及老师', value: unique(events.map((event) => event.teacher)).length },
-      { label: '最高月份', value: topCountLabel(monthCounts) },
-      { label: '最高老师', value: topCountLabel(teachers) },
-      { label: '更新时间', value: state.studentUpdatedAt || '-' }
-    ];
-    elStopsSummary.innerHTML = cards.map((c) => `
+    const teacherCounts = new Map();
+    const yearCounts = new Map();
+    const campusCounts = new Map();
+    for (const event of events) {
+      incrementCount(monthCounts, event.monthLabel);
+      incrementCount(teacherCounts, event.teacher);
+      incrementCount(yearCounts, event.year);
+      incrementCount(campusCounts, event.campus);
+    }
+    const rankRows = (map, type = '') => {
+      const rows = Array.from(map.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'))
+        .slice(0, 3);
+      if (!rows.length) return '<div class="empty-state">暂无数据</div>';
+      return `<div class="summary-rank">${rows.map(([name, count], idx) => `
+        <div class="summary-rank-row">
+          <span class="rank-no">${idx + 1}</span>
+          ${type === 'teacher'
+            ? `<button class="rank-name" type="button" data-stop-summary-teacher="${escapeHtml(name === '未填负责老师' ? '' : name)}">${escapeHtml(name)}</button>`
+            : `<span class="rank-name">${escapeHtml(name)}</span>`}
+          <span class="rank-value">${escapeHtml(pctText(count, events.length))}</span>
+        </div>
+      `).join('')}</div>`;
+    };
+    elStopsSummary.innerHTML = `
       <div class="card">
-        <div class="label">${escapeHtml(c.label)}</div>
-        <div class="value">${escapeHtml(String(c.value))}</div>
+        <div class="label">停步事件</div>
+        <div class="value">${escapeHtml(pctText(events.length, baseCount))}</div>
       </div>
-    `).join('');
+      <div class="card">
+        <div class="label">涉及学生</div>
+        <div class="value">${escapeHtml(String(students.size))}</div>
+      </div>
+      <div class="card">
+        <div class="label">最高月份</div>
+        ${rankRows(monthCounts)}
+      </div>
+      <div class="card">
+        <div class="label">最高老师</div>
+        ${rankRows(teacherCounts, 'teacher')}
+      </div>
+      <div class="card">
+        <div class="label">最高年级</div>
+        ${rankRows(yearCounts)}
+      </div>
+      <div class="card">
+        <div class="label">最高分院</div>
+        ${rankRows(campusCounts)}
+      </div>
+    `;
+    elStopsSummary.querySelectorAll('[data-stop-summary-teacher]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.stopFilters.teacher = btn.getAttribute('data-stop-summary-teacher') || '';
+        renderStopsView();
+      });
+    });
   }
 
   function renderStopsMonthly(baseRecords, months) {
