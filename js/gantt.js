@@ -111,6 +111,7 @@
   const elStudentCampus = $('#student-filter-campus');
   const elStudentWeekday = $('#student-filter-weekday');
   const elStudentStop = $('#student-filter-stop');
+  const elStudentTeacherSummary = $('#student-teacher-summary');
   const elStudentsMeta = $('#students-meta');
   const elStudentsTable = $('#students-table');
   const elMeta = $('#meta');
@@ -1009,6 +1010,48 @@
     return isStoppedStudent(rec) ? '已停止' : '';
   }
 
+  function incrementCount(map, key) {
+    const clean = key || '未填';
+    map.set(clean, (map.get(clean) || 0) + 1);
+  }
+
+  function topCountLabel(map) {
+    const items = Array.from(map.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'));
+    return items.slice(0, 3).map(([key, count]) => `${key} ${count}`).join('、') || '-';
+  }
+
+  function computeStudentTeacherSummary(list) {
+    const map = new Map();
+    for (const rec of list) {
+      const teacher = studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师';
+      if (!map.has(teacher)) {
+        map.set(teacher, {
+          teacher,
+          total: 0,
+          active: 0,
+          stopped: 0,
+          noWeekday: 0,
+          years: new Map(),
+          campuses: new Map(),
+          times: new Map(),
+          weekdays: new Map()
+        });
+      }
+      const stat = map.get(teacher);
+      stat.total++;
+      if (isStoppedStudent(rec)) stat.stopped++;
+      else stat.active++;
+      if (!studentWeekdays(rec).length) stat.noWeekday++;
+      incrementCount(stat.years, studentValue(rec, STUDENT_FIELDS.year));
+      incrementCount(stat.campuses, studentValue(rec, STUDENT_FIELDS.campus));
+      incrementCount(stat.times, studentValue(rec, STUDENT_FIELDS.time));
+      for (const day of studentWeekdays(rec)) incrementCount(stat.weekdays, day);
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      b.active - a.active || b.total - a.total || a.teacher.localeCompare(b.teacher, 'zh')
+    );
+  }
+
   function renderStudentFilterOptions() {
     const values = (field) => unique(state.students.map((rec) => studentValue(rec, field)).filter(Boolean))
       .sort((a, b) => a.localeCompare(b, 'zh'));
@@ -1103,10 +1146,49 @@
     `).join('') || '<tr><td colspan="10" class="empty-state">没有匹配的学生。</td></tr>';
   }
 
+  function renderStudentTeacherSummary(list) {
+    if (!elStudentTeacherSummary) return;
+    const stats = computeStudentTeacherSummary(list);
+    if (!stats.length) {
+      elStudentTeacherSummary.innerHTML = '<div class="empty-state">没有老师总结。</div>';
+      return;
+    }
+    elStudentTeacherSummary.innerHTML = `
+      <div class="student-teacher-grid">
+        ${stats.map((s) => `
+          <button class="student-teacher-card" type="button" data-student-teacher="${escapeHtml(s.teacher === '未填负责老师' ? '' : s.teacher)}">
+            <div class="student-teacher-head">
+              <strong>${escapeHtml(s.teacher)}</strong>
+              <span>${escapeHtml(String(s.total))} 人</span>
+            </div>
+            <div class="student-teacher-metrics">
+              <span>Active <b>${escapeHtml(String(s.active))}</b></span>
+              <span>Stop <b>${escapeHtml(String(s.stopped))}</b></span>
+              <span>无星期 <b>${escapeHtml(String(s.noWeekday))}</b></span>
+            </div>
+            <dl>
+              <dt>年级</dt><dd>${escapeHtml(topCountLabel(s.years))}</dd>
+              <dt>分院</dt><dd>${escapeHtml(topCountLabel(s.campuses))}</dd>
+              <dt>时间</dt><dd>${escapeHtml(topCountLabel(s.times))}</dd>
+              <dt>星期</dt><dd>${escapeHtml(topCountLabel(s.weekdays))}</dd>
+            </dl>
+          </button>
+        `).join('')}
+      </div>
+    `;
+    elStudentTeacherSummary.querySelectorAll('[data-student-teacher]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.studentFilters.teacher = btn.getAttribute('data-student-teacher') || '';
+        renderStudentsView();
+      });
+    });
+  }
+
   function renderStudentsView() {
     renderStudentFilterOptions();
     const list = filteredStudents();
     renderStudentsSummary(list);
+    renderStudentTeacherSummary(list);
     renderStudentsTable(list);
     elStudentsMeta.textContent = `学生表 ${state.students.length} 条记录 · 来源字段 ${state.studentColumns.length} 个`;
   }

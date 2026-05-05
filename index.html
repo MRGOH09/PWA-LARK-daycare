@@ -818,6 +818,77 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .student-teacher-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 10px;
+  }
+  .student-teacher-card {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+  }
+  .student-teacher-card:hover {
+    border-color: var(--accent);
+  }
+  .student-teacher-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .student-teacher-head strong {
+    font-size: 16px;
+  }
+  .student-teacher-head span {
+    color: var(--accent);
+    font-size: 18px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .student-teacher-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .student-teacher-metrics span {
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.42);
+    padding: 6px 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .student-teacher-metrics b {
+    display: block;
+    color: var(--text);
+    font-size: 16px;
+    margin-top: 2px;
+  }
+  .student-teacher-card dl {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 6px 8px;
+    margin: 0;
+    font-size: 12px;
+  }
+  .student-teacher-card dt {
+    color: var(--muted);
+  }
+  .student-teacher-card dd {
+    margin: 0;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .role-pill {
     display: inline-block;
@@ -1293,6 +1364,11 @@
     <div class="students-meta" id="students-meta">尚未加载</div>
   </div>
   <section class="teachers-wrapper">
+    <div class="panel-card">
+      <h3>负责老师总结</h3>
+      <div id="student-teacher-summary"></div>
+    </div>
+
     <div class="panel-card">
       <h3>学生名单</h3>
       <div class="students-table-wrap">
