@@ -59,6 +59,8 @@
     '1. JAN', '2. FEB', '3. MAR', '4. APR', '5. MAY', '6. JUNE',
     '7. JULY', '8. AUG', '9. SEP', '10. OCT', '11. NOV', '12. DEC'
   ];
+  const PRIMARY_YEAR_FILTER = '总小学人数';
+  const SECONDARY_YEAR_FILTER = '总中学人数';
   const PRIMARY_YEARS = ['PA', 'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6'];
   const SECONDARY_YEARS = ['F1', 'F2', 'F3', 'F4', 'F5'];
   const FIXED_YEAR_ORDER = [...PRIMARY_YEARS, ...SECONDARY_YEARS];
@@ -1144,7 +1146,10 @@
     const values = (field) => unique(state.students.map((rec) => studentValue(rec, field)).filter(Boolean))
       .sort((a, b) => a.localeCompare(b, 'zh'));
     const years = unique([
-      ...FIXED_YEAR_ORDER,
+      PRIMARY_YEAR_FILTER,
+      ...PRIMARY_YEARS,
+      SECONDARY_YEAR_FILTER,
+      ...SECONDARY_YEARS,
       ...values(STUDENT_FIELDS.year).map((year) => year.toUpperCase()).filter((year) => !FIXED_YEAR_ORDER.includes(year))
     ]);
     fillSelectWithAll(elStudentYear, years, state.studentFilters.year, '全部年级');
@@ -1158,7 +1163,9 @@
     const f = state.studentFilters;
     return state.students.filter((rec) => {
       if (q && !Object.values(rec.fields || {}).some((value) => String(value || '').toLowerCase().includes(q))) return false;
-      if (f.year && normalizedStudentYear(rec) !== f.year) return false;
+      if (f.year === PRIMARY_YEAR_FILTER && !PRIMARY_YEARS.includes(normalizedStudentYear(rec))) return false;
+      if (f.year === SECONDARY_YEAR_FILTER && !SECONDARY_YEARS.includes(normalizedStudentYear(rec))) return false;
+      if (f.year && f.year !== PRIMARY_YEAR_FILTER && f.year !== SECONDARY_YEAR_FILTER && normalizedStudentYear(rec) !== f.year) return false;
       if (f.teacher && studentValue(rec, STUDENT_FIELDS.teacher) !== f.teacher) return false;
       if (f.time && studentValue(rec, STUDENT_FIELDS.time) !== f.time) return false;
       if (f.campus && studentValue(rec, STUDENT_FIELDS.campus) !== f.campus) return false;
