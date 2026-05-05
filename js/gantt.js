@@ -74,6 +74,8 @@
     studentUpdatedAt: null,
     studentSearch: '',
     studentFilters: { year: '', teacher: '', time: '', campus: '', weekday: '', stop: '' },
+    stopSearch: '',
+    stopFilters: { month: '', teacher: '', year: '', campus: '' },
     updatedAt: null,
     teacherThreshold: DEFAULT_TEACHER_THRESHOLD,
     manpowerThreshold: DEFAULT_MANPOWER_THRESHOLD,
@@ -121,11 +123,22 @@
   const elStudentTeacherSummary = $('#student-teacher-summary');
   const elStudentsMeta = $('#students-meta');
   const elStudentsTable = $('#students-table');
+  const elStopsSummary = $('#stops-summary');
+  const elStopSearch = $('#stop-search');
+  const elStopMonth = $('#stop-filter-month');
+  const elStopTeacher = $('#stop-filter-teacher');
+  const elStopYear = $('#stop-filter-year');
+  const elStopCampus = $('#stop-filter-campus');
+  const elStopReset = $('#stop-reset');
+  const elStopsMeta = $('#stops-meta');
+  const elStopsMonthly = $('#stops-monthly');
+  const elStopsTable = $('#stops-table');
   const elMeta = $('#meta');
   const elModalRoot = $('#modal-root');
   const elViewGantt = $('#view-gantt');
   const elViewTeachers = $('#view-teachers');
   const elViewStudents = $('#view-students');
+  const elViewStops = $('#view-stops');
 
   function escapeHtml(s) {
     if (s === null || s === undefined) return '';
@@ -1150,7 +1163,10 @@
   function stopListButton(count, attrs, total) {
     if (count === null || count === undefined) return '-';
     const attrText = Object.entries(attrs)
-      .map(([key, value]) => `data-${key}="${escapeHtml(String(value))}"`)
+      .map(([key, value]) => {
+        const attr = key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+        return `data-${attr}="${escapeHtml(String(value))}"`;
+      })
       .join(' ');
     return `<button class="trend-stop-link" type="button" ${attrText}>${escapeHtml(pctText(count, total))}</button>`;
   }
@@ -1503,6 +1519,239 @@
     bindModalCommon();
   }
 
+  function studentMatchesYearFilter(rec, year) {
+    if (!year) return true;
+    if (year === '未填年级') return !normalizedStudentYear(rec);
+    if (year === PRIMARY_YEAR_FILTER) return PRIMARY_YEARS.includes(normalizedStudentYear(rec));
+    if (year === SECONDARY_YEAR_FILTER) return SECONDARY_YEARS.includes(normalizedStudentYear(rec));
+    return normalizedStudentYear(rec) === year;
+  }
+
+  function stopEventMonths() {
+    return activeStudentMonths(state.students);
+  }
+
+  function buildStopEvents(records, months = stopEventMonths()) {
+    const events = [];
+    months.forEach((month, idx) => {
+      if (idx === 0) return;
+      const prevMonth = months[idx - 1];
+      for (const rec of records) {
+        if (studentMonthValue(rec, prevMonth.month) !== 'ACTIVE') continue;
+        if (studentMonthValue(rec, month.month) === 'ACTIVE') continue;
+        events.push({
+          id: `${rec.recordId || studentValue(rec, STUDENT_FIELDS.no) || studentValue(rec, STUDENT_FIELDS.name)}-${month.month}`,
+          rec,
+          month: month.month,
+          monthLabel: month.label,
+          prevMonth: prevMonth.month,
+          prevMonthLabel: prevMonth.label,
+          teacher: studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师',
+          year: normalizedStudentYear(rec) || '未填年级',
+          campus: studentValue(rec, STUDENT_FIELDS.campus) || '未填分院',
+          name: studentValue(rec, STUDENT_FIELDS.name) || '-',
+          currentStatus: studentValue(rec, month.month) || '空',
+          previousStatus: studentValue(rec, prevMonth.month) || '-'
+        });
+      }
+    });
+    return events;
+  }
+
+  function stopBaseStudents({ includeSearch = true, includeMonth = false } = {}) {
+    const q = state.stopSearch.trim().toLowerCase();
+    const f = state.stopFilters;
+    return state.students.filter((rec) => {
+      if (includeSearch && q) {
+        const haystack = [
+          studentValue(rec, STUDENT_FIELDS.no),
+          studentValue(rec, STUDENT_FIELDS.name),
+          studentValue(rec, STUDENT_FIELDS.teacher),
+          studentValue(rec, STUDENT_FIELDS.year),
+          studentValue(rec, STUDENT_FIELDS.campus),
+          studentValue(rec, STUDENT_FIELDS.time)
+        ].join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (f.teacher && (studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师') !== f.teacher) return false;
+      if (!studentMatchesYearFilter(rec, f.year)) return false;
+      if (f.campus && (studentValue(rec, STUDENT_FIELDS.campus) || '未填分院') !== f.campus) return false;
+      if (includeMonth && f.month) {
+        const months = stopEventMonths();
+        const idx = months.findIndex((m) => m.month === f.month);
+        if (idx <= 0) return false;
+        if (studentMonthValue(rec, months[idx - 1].month) !== 'ACTIVE') return false;
+      }
+      return true;
+    });
+  }
+
+  function filteredStopEvents() {
+    const events = buildStopEvents(stopBaseStudents());
+    return events.filter((event) => !state.stopFilters.month || event.month === state.stopFilters.month);
+  }
+
+  function stopBaseCountForMonth(records, months, monthValue) {
+    const idx = months.findIndex((m) => m.month === monthValue);
+    if (idx <= 0 || !months[idx - 1]) return 0;
+    return records.filter((rec) => studentMonthValue(rec, months[idx - 1].month) === 'ACTIVE').length;
+  }
+
+  function stopBaseCountForFilters(records, months) {
+    if (state.stopFilters.month) return stopBaseCountForMonth(records, months, state.stopFilters.month);
+    return months.slice(1).reduce((sum, month) => sum + stopBaseCountForMonth(records, months, month.month), 0);
+  }
+
+  function renderStopFilterOptions() {
+    const values = (field, fallback) => unique(state.students.map((rec) => studentValue(rec, field) || fallback).filter(Boolean))
+      .sort((a, b) => a.localeCompare(b, 'zh'));
+    const years = unique([
+      PRIMARY_YEAR_FILTER,
+      ...PRIMARY_YEARS,
+      SECONDARY_YEAR_FILTER,
+      ...SECONDARY_YEARS,
+      ...values(STUDENT_FIELDS.year, '未填年级').map((year) => year.toUpperCase()).filter((year) => !FIXED_YEAR_ORDER.includes(year))
+    ]);
+    const months = stopEventMonths().slice(1).map((month) => ({ value: month.month, label: month.label }));
+    if (elStopMonth) {
+      elStopMonth.innerHTML = '<option value="">全部月份</option>' +
+        months.map((month) => `<option value="${escapeHtml(month.value)}">${escapeHtml(month.label)}</option>`).join('');
+      elStopMonth.value = state.stopFilters.month || '';
+    }
+    fillSelectWithAll(elStopTeacher, values(STUDENT_FIELDS.teacher, '未填负责老师'), state.stopFilters.teacher, '全部老师');
+    fillSelectWithAll(elStopYear, years, state.stopFilters.year, '全部年级');
+    fillSelectWithAll(elStopCampus, values(STUDENT_FIELDS.campus, '未填分院'), state.stopFilters.campus, '全部分院');
+  }
+
+  function renderStopsSummary(events, baseCount) {
+    if (!elStopsSummary) return;
+    const students = new Set(events.map((event) => event.rec.recordId || event.name));
+    const teachers = countMap(events.map((event) => event.rec), STUDENT_FIELDS.teacher, '未填负责老师');
+    const monthCounts = new Map();
+    for (const event of events) incrementCount(monthCounts, event.monthLabel);
+    const cards = [
+      { label: '停步事件', value: pctText(events.length, baseCount) },
+      { label: '涉及学生', value: students.size },
+      { label: '涉及老师', value: unique(events.map((event) => event.teacher)).length },
+      { label: '最高月份', value: topCountLabel(monthCounts) },
+      { label: '最高老师', value: topCountLabel(teachers) },
+      { label: '更新时间', value: state.studentUpdatedAt || '-' }
+    ];
+    elStopsSummary.innerHTML = cards.map((c) => `
+      <div class="card">
+        <div class="label">${escapeHtml(c.label)}</div>
+        <div class="value">${escapeHtml(String(c.value))}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderStopsMonthly(baseRecords, months) {
+    if (!elStopsMonthly) return;
+    const rows = months.slice(1).map((month) => {
+      const events = buildStopEvents(baseRecords, months).filter((event) => event.month === month.month);
+      const base = stopBaseCountForMonth(baseRecords, months, month.month);
+      const teacherCounts = new Map();
+      const yearCounts = new Map();
+      for (const event of events) {
+        incrementCount(teacherCounts, event.teacher);
+        incrementCount(yearCounts, event.year);
+      }
+      return { month, events, base, teacherCounts, yearCounts };
+    }).filter((row) => row.base || row.events.length);
+    if (!rows.length) {
+      elStopsMonthly.innerHTML = '<div class="empty-state">没有停步月份数据。</div>';
+      return;
+    }
+    elStopsMonthly.innerHTML = `
+      <div class="student-trend-wrap">
+        <table class="student-trend-table">
+          <thead>
+            <tr>
+              <th>月份</th>
+              <th>上月 Active</th>
+              <th>停步人数（%）</th>
+              <th>最高老师</th>
+              <th>最高年级</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((row) => `
+              <tr>
+                <th>${escapeHtml(row.month.label)}</th>
+                <td>${escapeHtml(String(row.base))}</td>
+                <td>${stopListButton(row.events.length, { stopPageMonth: row.month.month }, row.base)}</td>
+                <td>${escapeHtml(topCountLabel(row.teacherCounts))}</td>
+                <td>${escapeHtml(topCountLabel(row.yearCounts))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    elStopsMonthly.querySelectorAll('[data-stop-page-month]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.stopFilters.month = btn.getAttribute('data-stop-page-month') || '';
+        renderStopsView();
+      });
+    });
+  }
+
+  function renderStopsTable(events) {
+    if (!elStopsTable) return;
+    elStopsTable.querySelector('thead').innerHTML = `
+      <tr>
+        <th>月份</th>
+        <th>学生</th>
+        <th>负责老师</th>
+        <th>年级</th>
+        <th>分院</th>
+        <th>时间段</th>
+        <th>上月</th>
+        <th>本月</th>
+        <th>Stop 月份</th>
+      </tr>
+    `;
+    const rows = events
+      .slice()
+      .sort((a, b) =>
+        a.month.localeCompare(b.month) ||
+        a.teacher.localeCompare(b.teacher, 'zh') ||
+        a.year.localeCompare(b.year, 'zh') ||
+        a.name.localeCompare(b.name, 'zh')
+      )
+      .map((event) => `
+        <tr>
+          <td><strong>${escapeHtml(event.prevMonthLabel)} → ${escapeHtml(event.monthLabel)}</strong></td>
+          <td><strong class="student-name">${escapeHtml(event.name)}</strong></td>
+          <td><button class="trend-link" type="button" data-stop-teacher-analysis="${escapeHtml(event.teacher === '未填负责老师' ? '' : event.teacher)}">${escapeHtml(event.teacher)}</button></td>
+          <td>${escapeHtml(event.year)}</td>
+          <td>${escapeHtml(event.campus)}</td>
+          <td>${escapeHtml(studentValue(event.rec, STUDENT_FIELDS.time) || '-')}</td>
+          <td>${escapeHtml(event.previousStatus)}</td>
+          <td><span class="student-status stopped">${escapeHtml(event.currentStatus)}</span></td>
+          <td>${escapeHtml(stopMonthLabel(event.rec) || '-')}</td>
+        </tr>
+      `).join('');
+    elStopsTable.querySelector('tbody').innerHTML = rows || '<tr><td colspan="9" class="empty-state">没有匹配的停步学生。</td></tr>';
+    elStopsTable.querySelectorAll('[data-stop-teacher-analysis]').forEach((btn) => {
+      btn.addEventListener('click', () => openStudentTeacherAnalysis(btn.getAttribute('data-stop-teacher-analysis') || ''));
+    });
+  }
+
+  function renderStopsView() {
+    renderStopFilterOptions();
+    const months = stopEventMonths();
+    const baseRecords = stopBaseStudents();
+    const events = filteredStopEvents();
+    const baseCount = stopBaseCountForFilters(baseRecords, months);
+    renderStopsSummary(events, baseCount);
+    renderStopsMonthly(baseRecords, months);
+    renderStopsTable(events);
+    if (elStopsMeta) {
+      elStopsMeta.textContent = `停步名单 ${events.length} 条 · 基数 ${baseCount} · 来源学生 ${state.students.length} 人`;
+    }
+  }
+
   function renderTrendGroupTable(title, label, rows, months) {
     if (!rows.length) return '';
     return `
@@ -1617,7 +1866,8 @@
     state.studentColumns = data.columns || [];
     state.studentUpdatedAt = data.updatedAt || null;
     state.lastStudentsHash = String(data.count || 0) + '|' + (data.updatedAt || '');
-    renderStudentsView();
+    if (state.view === 'stops') renderStopsView();
+    else renderStudentsView();
   }
 
   function saveStudentsCache(data) {
@@ -1642,7 +1892,11 @@
       const cached = JSON.parse(raw);
       if (!cached || !cached.data || !cached.data.records) return false;
       applyStudentsPayload(cached.data);
-      elStudentsMeta.textContent = `先显示本机缓存 ${state.students.length} 条 · 正在更新最新名单…`;
+      if (state.view === 'stops' && elStopsMeta) {
+        elStopsMeta.textContent = `先显示本机缓存 ${state.students.length} 条 · 正在更新最新停步名单…`;
+      } else {
+        elStudentsMeta.textContent = `先显示本机缓存 ${state.students.length} 条 · 正在更新最新名单…`;
+      }
       return true;
     } catch {
       return false;
@@ -2122,6 +2376,7 @@
     elViewGantt.hidden = view !== 'gantt';
     elViewTeachers.hidden = view !== 'teachers';
     elViewStudents.hidden = view !== 'students';
+    elViewStops.hidden = view !== 'stops';
     document.querySelectorAll('.tabs button').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-view') === view);
     });
@@ -2129,7 +2384,7 @@
       const views = el.getAttribute('data-view-only').split(/\s+/);
       el.style.display = views.includes(view) ? '' : 'none';
     });
-    if (view === 'students' && !state.lastStudentsHash) loadStudents(true);
+    if ((view === 'students' || view === 'stops') && !state.lastStudentsHash) loadStudents(true);
     rerender();
   }
 
@@ -2140,8 +2395,10 @@
       renderGantt(filtered);
     } else if (state.view === 'teachers') {
       renderTeachersView(filtered);
-    } else {
+    } else if (state.view === 'students') {
       renderStudentsView();
+    } else {
+      renderStopsView();
     }
   }
 
@@ -2194,8 +2451,10 @@
       saveStudentsCache(data);
     } catch (err) {
       elStudentsMeta.textContent = `学生名单加载失败：${err.message}`;
+      if (elStopsMeta) elStopsMeta.textContent = `停步名单加载失败：${err.message}`;
       if (!state.students.length) {
         elStudentsTable.querySelector('tbody').innerHTML = `<tr><td class="error-state">无法读取学生名单：${escapeHtml(err.message)}</td></tr>`;
+        if (elStopsTable) elStopsTable.querySelector('tbody').innerHTML = `<tr><td class="error-state">无法读取停步名单：${escapeHtml(err.message)}</td></tr>`;
       }
     }
   }
@@ -2204,7 +2463,7 @@
     stopAutoRefresh();
     state.refreshTimer = setInterval(() => {
       if (document.hidden || state.modalOpen) return;
-      if (state.view === 'students') loadStudents(false);
+      if (state.view === 'students' || state.view === 'stops') loadStudents(false);
       else loadSchedule(false);
     }, AUTO_REFRESH_MS);
   }
@@ -2230,7 +2489,7 @@
       rerender();
     });
     elRefresh.addEventListener('click', () => {
-      if (state.view === 'students') loadStudents(false, true);
+      if (state.view === 'students' || state.view === 'stops') loadStudents(false, true);
       else loadSchedule(false);
     });
     elAddSlot.addEventListener('click', () => openScheduleEditor(defaultNewRecord(), 'new'));
@@ -2271,6 +2530,32 @@
         renderStudentsView();
       });
     });
+    if (elStopSearch) {
+      elStopSearch.addEventListener('input', () => {
+        state.stopSearch = elStopSearch.value || '';
+        renderStopsView();
+      });
+    }
+    [
+      [elStopMonth, 'month'],
+      [elStopTeacher, 'teacher'],
+      [elStopYear, 'year'],
+      [elStopCampus, 'campus']
+    ].forEach(([el, key]) => {
+      if (!el) return;
+      el.addEventListener('change', () => {
+        state.stopFilters[key] = el.value || '';
+        renderStopsView();
+      });
+    });
+    if (elStopReset) {
+      elStopReset.addEventListener('click', () => {
+        state.stopSearch = '';
+        state.stopFilters = { month: '', teacher: '', year: '', campus: '' };
+        if (elStopSearch) elStopSearch.value = '';
+        renderStopsView();
+      });
+    }
   }
 
   function init() {
@@ -2281,7 +2566,7 @@
     startAutoRefresh();
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        if (state.view === 'students') loadStudents(false);
+        if (state.view === 'students' || state.view === 'stops') loadStudents(false);
         else loadSchedule(false);
       }
     });

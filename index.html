@@ -1360,6 +1360,7 @@
   <button data-view="gantt" class="active" type="button">周排班 Gantt</button>
   <button data-view="teachers" type="button">老师工作量</button>
   <button data-view="students" type="button">学生名单</button>
+  <button data-view="stops" type="button">停步名单</button>
 </nav>
 
 <section class="filters">
@@ -1518,6 +1519,44 @@
       </div>
       <div class="students-table-wrap">
         <table class="students-table" id="students-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ========== Stop Students View ========== -->
+<div id="view-stops" class="view-section" hidden>
+  <section class="summary" id="stops-summary"></section>
+  <section class="teachers-wrapper">
+    <div class="panel-card">
+      <h3>停步名单筛选</h3>
+      <div class="students-toolbar">
+        <div class="students-search">
+          <input id="stop-search" type="search" placeholder="搜索停步学生" autocomplete="off" />
+        </div>
+        <div class="students-filters">
+          <select id="stop-filter-month" aria-label="筛选停步月份"></select>
+          <select id="stop-filter-teacher" aria-label="筛选负责老师"></select>
+          <select id="stop-filter-year" aria-label="筛选年级"></select>
+          <select id="stop-filter-campus" aria-label="筛选分院"></select>
+          <button id="stop-reset" class="secondary" type="button">重置</button>
+        </div>
+        <div class="students-meta" id="stops-meta">尚未加载</div>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <h3>每月停步概览</h3>
+      <div id="stops-monthly"></div>
+    </div>
+
+    <div class="panel-card">
+      <h3>停步学生名单</h3>
+      <div class="students-table-wrap">
+        <table class="students-table" id="stops-table">
           <thead></thead>
           <tbody></tbody>
         </table>
