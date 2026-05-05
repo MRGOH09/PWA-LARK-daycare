@@ -38,6 +38,23 @@
     assistant: '助理',
     assistantTeacher: '助教'
   };
+  const STUDENT_FIELDS = {
+    no: 'NO',
+    name: '学生名字',
+    year: 'YEAR / FORM',
+    teacher: '负责老师',
+    time: '时间段',
+    note: 'Text 3',
+    campus: '分院',
+    stopMonth: 'Stop 月份'
+  };
+  const STUDENT_WEEKDAYS = [
+    { key: 'MON', label: '一' },
+    { key: 'TUE', label: '二' },
+    { key: 'WED', label: '三' },
+    { key: 'THUR', label: '四' },
+    { key: 'FRI', label: '五' }
+  ];
 
   const state = {
     records: [],
@@ -46,6 +63,7 @@
     studentColumns: [],
     studentUpdatedAt: null,
     studentSearch: '',
+    studentFilters: { year: '', teacher: '', time: '', campus: '', weekday: '', stop: '' },
     updatedAt: null,
     teacherThreshold: DEFAULT_TEACHER_THRESHOLD,
     manpowerThreshold: DEFAULT_MANPOWER_THRESHOLD,
@@ -83,6 +101,12 @@
   const elTeachersWeeklySchedule = $('#teachers-weekly-schedule');
   const elStudentsSummary = $('#students-summary');
   const elStudentSearch = $('#student-search');
+  const elStudentYear = $('#student-filter-year');
+  const elStudentTeacher = $('#student-filter-teacher');
+  const elStudentTime = $('#student-filter-time');
+  const elStudentCampus = $('#student-filter-campus');
+  const elStudentWeekday = $('#student-filter-weekday');
+  const elStudentStop = $('#student-filter-stop');
   const elStudentsMeta = $('#students-meta');
   const elStudentsTable = $('#students-table');
   const elMeta = $('#meta');
@@ -267,6 +291,13 @@
 
   function fillSelect(el, options, current) {
     el.innerHTML = '<option value="">全部</option>' +
+      options.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    el.value = current && options.includes(current) ? current : '';
+  }
+
+  function fillSelectWithAll(el, options, current, allLabel = '全部') {
+    if (!el) return;
+    el.innerHTML = `<option value="">${escapeHtml(allLabel)}</option>` +
       options.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
     el.value = current && options.includes(current) ? current : '';
   }
@@ -942,19 +973,55 @@
      STUDENTS VIEW
   ============================================================ */
 
+  function studentValue(rec, field) {
+    return String((rec.fields || {})[field] || '').trim();
+  }
+
+  function studentWeekdays(rec) {
+    return STUDENT_WEEKDAYS
+      .filter((day) => studentValue(rec, day.key))
+      .map((day) => day.label);
+  }
+
+  function isStoppedStudent(rec) {
+    return Boolean(studentValue(rec, STUDENT_FIELDS.stopMonth));
+  }
+
+  function renderStudentFilterOptions() {
+    const values = (field) => unique(state.students.map((rec) => studentValue(rec, field)).filter(Boolean))
+      .sort((a, b) => a.localeCompare(b, 'zh'));
+    fillSelectWithAll(elStudentYear, values(STUDENT_FIELDS.year), state.studentFilters.year, '全部年级');
+    fillSelectWithAll(elStudentTeacher, values(STUDENT_FIELDS.teacher), state.studentFilters.teacher, '全部老师');
+    fillSelectWithAll(elStudentTime, values(STUDENT_FIELDS.time), state.studentFilters.time, '全部时间段');
+    fillSelectWithAll(elStudentCampus, values(STUDENT_FIELDS.campus), state.studentFilters.campus, '全部分院');
+  }
+
   function filteredStudents() {
     const q = state.studentSearch.trim().toLowerCase();
-    if (!q) return state.students;
-    return state.students.filter((rec) =>
-      Object.values(rec.fields || {}).some((value) => String(value || '').toLowerCase().includes(q))
-    );
+    const f = state.studentFilters;
+    return state.students.filter((rec) => {
+      if (q && !Object.values(rec.fields || {}).some((value) => String(value || '').toLowerCase().includes(q))) return false;
+      if (f.year && studentValue(rec, STUDENT_FIELDS.year) !== f.year) return false;
+      if (f.teacher && studentValue(rec, STUDENT_FIELDS.teacher) !== f.teacher) return false;
+      if (f.time && studentValue(rec, STUDENT_FIELDS.time) !== f.time) return false;
+      if (f.campus && studentValue(rec, STUDENT_FIELDS.campus) !== f.campus) return false;
+      if (f.weekday && !studentValue(rec, f.weekday)) return false;
+      if (f.stop === 'active' && isStoppedStudent(rec)) return false;
+      if (f.stop === 'stopped' && !isStoppedStudent(rec)) return false;
+      return true;
+    });
   }
 
   function renderStudentsSummary(list) {
+    const stopped = state.students.filter(isStoppedStudent).length;
+    const active = state.students.length - stopped;
+    const noTeacher = state.students.filter((rec) => !studentValue(rec, STUDENT_FIELDS.teacher)).length;
     const cards = [
       { label: '学生总数', value: state.students.length },
       { label: '目前显示', value: list.length },
-      { label: '字段数', value: state.studentColumns.length },
+      { label: '活跃学生', value: active },
+      { label: '已停止', value: stopped },
+      { label: '未填负责老师', value: noTeacher },
       { label: '更新时间', value: state.studentUpdatedAt || '-' }
     ];
     elStudentsSummary.innerHTML = cards.map((c) => `
@@ -966,25 +1033,52 @@
   }
 
   function renderStudentsTable(list) {
-    const cols = state.studentColumns;
-    if (!cols.length) {
+    if (!state.students.length) {
       elStudentsTable.querySelector('thead').innerHTML = '';
       elStudentsTable.querySelector('tbody').innerHTML = '<tr><td class="empty-state">没有学生记录。</td></tr>';
       return;
     }
     elStudentsTable.querySelector('thead').innerHTML = `
-      <tr>${cols.map((col) => `<th>${escapeHtml(col)}</th>`).join('')}</tr>
+      <tr>
+        <th>NO</th>
+        <th>学生</th>
+        <th>年级</th>
+        <th>负责老师</th>
+        <th>时间段</th>
+        <th>分院</th>
+        <th>星期</th>
+        <th>状态</th>
+        <th>备注</th>
+      </tr>
     `;
     elStudentsTable.querySelector('tbody').innerHTML = list.map((rec) => `
-      <tr>${cols.map((col) => `<td>${escapeHtml(rec.fields[col] || '')}</td>`).join('')}</tr>
-    `).join('') || `<tr><td colspan="${cols.length}" class="empty-state">没有匹配的学生。</td></tr>`;
+      <tr>
+        <td class="num">${escapeHtml(studentValue(rec, STUDENT_FIELDS.no))}</td>
+        <td><strong class="student-name">${escapeHtml(studentValue(rec, STUDENT_FIELDS.name) || '-')}</strong></td>
+        <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.year) || '-')}</td>
+        <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.teacher) || '-')}</td>
+        <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.time) || '-')}</td>
+        <td>${escapeHtml(studentValue(rec, STUDENT_FIELDS.campus) || '-')}</td>
+        <td>
+          <div class="student-day-badges">
+            ${studentWeekdays(rec).map((day) => `<span>${escapeHtml(day)}</span>`).join('') || '<em>-</em>'}
+          </div>
+        </td>
+        <td>${isStoppedStudent(rec)
+          ? `<span class="student-status stopped">Stop ${escapeHtml(studentValue(rec, STUDENT_FIELDS.stopMonth))}</span>`
+          : '<span class="student-status active">Active</span>'}
+        </td>
+        <td class="student-note">${escapeHtml(studentValue(rec, STUDENT_FIELDS.note) || '-')}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="9" class="empty-state">没有匹配的学生。</td></tr>';
   }
 
   function renderStudentsView() {
+    renderStudentFilterOptions();
     const list = filteredStudents();
     renderStudentsSummary(list);
     renderStudentsTable(list);
-    elStudentsMeta.textContent = `学生表 ${state.students.length} 条记录 · ${state.studentColumns.length} 个字段`;
+    elStudentsMeta.textContent = `学生表 ${state.students.length} 条记录 · 来源字段 ${state.studentColumns.length} 个`;
   }
 
   /* ============================================================
@@ -1593,6 +1687,20 @@
         renderStudentsView();
       });
     }
+    [
+      [elStudentYear, 'year'],
+      [elStudentTeacher, 'teacher'],
+      [elStudentTime, 'time'],
+      [elStudentCampus, 'campus'],
+      [elStudentWeekday, 'weekday'],
+      [elStudentStop, 'stop']
+    ].forEach(([el, key]) => {
+      if (!el) return;
+      el.addEventListener('change', () => {
+        state.studentFilters[key] = el.value || '';
+        renderStudentsView();
+      });
+    });
   }
 
   function init() {
