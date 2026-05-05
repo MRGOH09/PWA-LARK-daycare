@@ -1,6 +1,6 @@
 {
-  "name": "一周人力 Gantt Dashboard",
-  "short_name": "Gantt",
+  "name": "DAYCARE PWA",
+  "short_name": "DAYCARE",
   "description": "一周人力覆盖与时段人数 Gantt Dashboard",
   "start_url": "/",
   "scope": "/",
