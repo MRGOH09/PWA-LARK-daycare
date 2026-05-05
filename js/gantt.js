@@ -1141,12 +1141,18 @@
     return records;
   }
 
-  function stopListButton(count, attrs) {
+  function pctText(count, total) {
+    if (count === null || count === undefined) return '-';
+    if (!total) return `${count} (0%)`;
+    return `${count} (${((count / total) * 100).toFixed(1)}%)`;
+  }
+
+  function stopListButton(count, attrs, total) {
     if (count === null || count === undefined) return '-';
     const attrText = Object.entries(attrs)
       .map(([key, value]) => `data-${key}="${escapeHtml(String(value))}"`)
       .join(' ');
-    return `<button class="trend-stop-link" type="button" ${attrText}>${escapeHtml(String(count))}</button>`;
+    return `<button class="trend-stop-link" type="button" ${attrText}>${escapeHtml(pctText(count, total))}</button>`;
   }
 
   function monthlyTrendByGroup(list, months, field, fallback) {
@@ -1308,7 +1314,7 @@
             </div>
             <div class="student-teacher-metrics">
               <span>Active <b>${escapeHtml(String(s.active))}</b></span>
-              <span>Stop <b>${escapeHtml(String(s.stopped))}</b></span>
+              <span>Stop <b>${escapeHtml(pctText(s.stopped, s.total))}</b></span>
               <span>无星期 <b>${escapeHtml(String(s.noWeekday))}</b></span>
             </div>
             <dl>
@@ -1354,11 +1360,11 @@
           <tbody>
             <tr>
               <th>Active</th>
-              ${months.map((m, idx) => `<td><strong>${escapeHtml(String(m.active))}</strong><span class="trend-delta ${deltaClass(m.delta)}">${escapeHtml(deltaText(m.delta))}</span><span class="trend-move-line">进 ${escapeHtml(m.gained === null ? '-' : String(m.gained))} / 停 ${stopListButton(m.lost, { stopScope: 'analysisOverall', stopMonthIndex: idx })}</span></td>`).join('')}
+              ${months.map((m, idx) => `<td><strong>${escapeHtml(String(m.active))}</strong><span class="trend-delta ${deltaClass(m.delta)}">${escapeHtml(deltaText(m.delta))}</span><span class="trend-move-line">进 ${escapeHtml(m.gained === null ? '-' : String(m.gained))} / 停 ${stopListButton(m.lost, { stopScope: 'analysisOverall', stopMonthIndex: idx }, idx === 0 ? 0 : months[idx - 1].active)}</span></td>`).join('')}
             </tr>
             <tr>
               <th>Stop</th>
-              ${months.map((m) => `<td>${escapeHtml(String(m.stopped))}</td>`).join('')}
+              ${months.map((m) => `<td>${escapeHtml(pctText(m.stopped, m.active + m.stopped + m.archived))}</td>`).join('')}
             </tr>
           </tbody>
         </table>
@@ -1388,7 +1394,7 @@
           <div class="student-analysis-grid">
             <div class="role-modal-metric"><span>总学生</span><b>${records.length}</b></div>
             <div class="role-modal-metric"><span>Active</span><b>${active}</b></div>
-            <div class="role-modal-metric"><span>Stop</span><b>${stopped}</b></div>
+            <div class="role-modal-metric"><span>Stop</span><b>${escapeHtml(pctText(stopped, records.length))}</b></div>
             <div class="role-modal-metric"><span>小学</span><b>${yearGroups.primary}</b></div>
             <div class="role-modal-metric"><span>中学</span><b>${yearGroups.secondary}</b></div>
             <div class="role-modal-metric"><span>无星期</span><b>${noWeekday}</b></div>
@@ -1440,15 +1446,18 @@
         const group = btn.getAttribute('data-stop-group') || '';
         const scopedRecords = group ? recordsForGroup(baseRecords, label, group) : baseRecords;
         const lost = lostStudentsForMonth(scopedRecords, months, idx);
+        const base = idx > 0 && months[idx - 1]
+          ? scopedRecords.filter((rec) => studentMonthValue(rec, months[idx - 1].month) === 'ACTIVE').length
+          : 0;
         const month = months[idx];
         const prevMonth = months[idx - 1];
         const title = `${group || '全部学生'} · ${prevMonth ? prevMonth.label : '-'} 到 ${month ? month.label : '-'} 停步名单`;
-        openStudentStopList(title, lost, prevMonth, month);
+        openStudentStopList(title, lost, prevMonth, month, base);
       });
     });
   }
 
-  function openStudentStopList(title, records, prevMonth, month) {
+  function openStudentStopList(title, records, prevMonth, month, baseCount) {
     const rows = records
       .slice()
       .sort((a, b) =>
@@ -1473,7 +1482,7 @@
         <div class="modal wide" role="dialog" aria-modal="true">
           <h2>${escapeHtml(title)}</h2>
           <div class="student-analysis-grid" style="margin-bottom:12px;">
-            <div class="role-modal-metric"><span>停步人数</span><b>${records.length}</b></div>
+            <div class="role-modal-metric"><span>停步人数</span><b>${escapeHtml(pctText(records.length, baseCount))}</b></div>
             <div class="role-modal-metric"><span>上个月</span><b>${escapeHtml(prevMonth ? prevMonth.label : '-')}</b></div>
             <div class="role-modal-metric"><span>这个月</span><b>${escapeHtml(month ? month.label : '-')}</b></div>
           </div>
@@ -1522,7 +1531,7 @@
                     <span class="trend-delta ${deltaClass(delta)}">${escapeHtml(deltaText(delta))}</span>
                     <span class="trend-move-line">
                       进 ${escapeHtml(row.gained[idx] === null ? '-' : String(row.gained[idx]))}
-                      / 停 ${stopListButton(row.lost[idx], { stopGroupLabel: label, stopGroup: row.group, stopMonthIndex: idx })}
+                      / 停 ${stopListButton(row.lost[idx], { stopGroupLabel: label, stopGroup: row.group, stopMonthIndex: idx }, idx === 0 ? 0 : row.counts[idx - 1])}
                     </span>
                   </td>`;
                 }).join('')}
@@ -1570,11 +1579,11 @@
             </tr>
             <tr>
               <th>停步人数</th>
-              ${months.map((m, idx) => `<td><span class="trend-move lost">${stopListButton(m.lost, { stopScope: 'overall', stopMonthIndex: idx })}</span></td>`).join('')}
+              ${months.map((m, idx) => `<td><span class="trend-move lost">${stopListButton(m.lost, { stopScope: 'overall', stopMonthIndex: idx }, idx === 0 ? 0 : months[idx - 1].active)}</span></td>`).join('')}
             </tr>
             <tr>
               <th>Stop</th>
-              ${months.map((m) => `<td>${escapeHtml(String(m.stopped))}</td>`).join('')}
+              ${months.map((m) => `<td>${escapeHtml(pctText(m.stopped, m.active + m.stopped + m.archived))}</td>`).join('')}
             </tr>
             <tr>
               <th>Archived</th>
