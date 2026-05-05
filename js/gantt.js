@@ -111,6 +111,7 @@
   const elStudentCampus = $('#student-filter-campus');
   const elStudentWeekday = $('#student-filter-weekday');
   const elStudentStop = $('#student-filter-stop');
+  const elStudentMonthlyTrend = $('#student-monthly-trend');
   const elStudentTeacherSummary = $('#student-teacher-summary');
   const elStudentsMeta = $('#students-meta');
   const elStudentsTable = $('#students-table');
@@ -1052,6 +1053,48 @@
     );
   }
 
+  function studentMonthValue(rec, month) {
+    return studentValue(rec, month).toUpperCase();
+  }
+
+  function activeStudentMonths(list) {
+    const rows = STUDENT_MONTHS.map((month) => {
+      const active = list.filter((rec) => studentMonthValue(rec, month) === 'ACTIVE').length;
+      const stopped = list.filter((rec) => studentMonthValue(rec, month) === 'STOP').length;
+      const archived = list.filter((rec) => studentMonthValue(rec, month) === 'ARCHIVED').length;
+      return { month, label: shortMonth(month), active, stopped, archived };
+    });
+    const visible = rows.filter((row) => row.active || row.stopped || row.archived);
+    return visible.map((row, idx) => ({
+      ...row,
+      delta: idx === 0 ? null : row.active - visible[idx - 1].active
+    }));
+  }
+
+  function monthlyTrendByTeacher(list, months) {
+    const teachers = unique(list.map((rec) => studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师'))
+      .sort((a, b) => a.localeCompare(b, 'zh'));
+    return teachers.map((teacher) => {
+      const records = list.filter((rec) => (studentValue(rec, STUDENT_FIELDS.teacher) || '未填负责老师') === teacher);
+      const counts = months.map((m) => records.filter((rec) => studentMonthValue(rec, m.month) === 'ACTIVE').length);
+      const latest = counts.length ? counts[counts.length - 1] : 0;
+      const first = counts.length ? counts[0] : 0;
+      return { teacher, counts, latest, change: latest - first };
+    }).sort((a, b) => b.latest - a.latest || b.change - a.change || a.teacher.localeCompare(b.teacher, 'zh'));
+  }
+
+  function deltaText(delta) {
+    if (delta === null || delta === undefined) return '-';
+    if (delta > 0) return `+${delta}`;
+    return String(delta);
+  }
+
+  function deltaClass(delta) {
+    if (delta > 0) return 'up';
+    if (delta < 0) return 'down';
+    return 'flat';
+  }
+
   function renderStudentFilterOptions() {
     const values = (field) => unique(state.students.map((rec) => studentValue(rec, field)).filter(Boolean))
       .sort((a, b) => a.localeCompare(b, 'zh'));
@@ -1184,10 +1227,75 @@
     });
   }
 
+  function renderStudentMonthlyTrend(list) {
+    if (!elStudentMonthlyTrend) return;
+    const months = activeStudentMonths(list);
+    if (!months.length) {
+      elStudentMonthlyTrend.innerHTML = '<div class="empty-state">没有月份状态数据。</div>';
+      return;
+    }
+    const teacherRows = monthlyTrendByTeacher(list, months);
+    elStudentMonthlyTrend.innerHTML = `
+      <div class="student-trend-wrap">
+        <table class="student-trend-table">
+          <thead>
+            <tr>
+              <th>月份</th>
+              ${months.map((m) => `<th>${escapeHtml(m.label)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>Active 人数</th>
+              ${months.map((m) => `<td><strong>${escapeHtml(String(m.active))}</strong></td>`).join('')}
+            </tr>
+            <tr>
+              <th>比上月</th>
+              ${months.map((m) => `<td><span class="trend-delta ${deltaClass(m.delta)}">${escapeHtml(deltaText(m.delta))}</span></td>`).join('')}
+            </tr>
+            <tr>
+              <th>Stop</th>
+              ${months.map((m) => `<td>${escapeHtml(String(m.stopped))}</td>`).join('')}
+            </tr>
+            <tr>
+              <th>Archived</th>
+              ${months.map((m) => `<td>${escapeHtml(String(m.archived))}</td>`).join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="student-trend-wrap">
+        <table class="student-trend-table teacher-trend">
+          <thead>
+            <tr>
+              <th>负责老师</th>
+              ${months.map((m) => `<th>${escapeHtml(m.label)}</th>`).join('')}
+              <th>首尾变化</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${teacherRows.map((row) => `
+              <tr>
+                <th>${escapeHtml(row.teacher)}</th>
+                ${row.counts.map((count, idx) => {
+                  const prev = idx === 0 ? null : row.counts[idx - 1];
+                  const delta = prev === null ? null : count - prev;
+                  return `<td><strong>${escapeHtml(String(count))}</strong><span class="trend-delta ${deltaClass(delta)}">${escapeHtml(deltaText(delta))}</span></td>`;
+                }).join('')}
+                <td><span class="trend-delta ${deltaClass(row.change)}">${escapeHtml(deltaText(row.change))}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
   function renderStudentsView() {
     renderStudentFilterOptions();
     const list = filteredStudents();
     renderStudentsSummary(list);
+    renderStudentMonthlyTrend(list);
     renderStudentTeacherSummary(list);
     renderStudentsTable(list);
     elStudentsMeta.textContent = `学生表 ${state.students.length} 条记录 · 来源字段 ${state.studentColumns.length} 个`;
