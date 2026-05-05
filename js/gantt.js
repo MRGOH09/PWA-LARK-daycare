@@ -1376,10 +1376,10 @@
     renderStudentFilterOptions();
     const list = filteredStudents();
     renderStudentsSummary(list);
-    renderStudentMonthlyTrend(list);
-    renderStudentTeacherSummary(list);
+    renderStudentMonthlyTrend(state.students);
+    renderStudentTeacherSummary(state.students);
     renderStudentsTable(list);
-    elStudentsMeta.textContent = `学生表 ${state.students.length} 条记录 · 来源字段 ${state.studentColumns.length} 个`;
+    elStudentsMeta.textContent = `名单显示 ${list.length}/${state.students.length} · 来源字段 ${state.studentColumns.length} 个`;
   }
 
   /* ============================================================

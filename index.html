@@ -671,7 +671,7 @@
     gap: 10px;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px 12px;
+    padding: 0 0 12px;
   }
   .students-search {
     display: flex;
@@ -1443,31 +1443,6 @@
 <!-- ========== Students View ========== -->
 <div id="view-students" class="view-section" hidden>
   <section class="summary" id="students-summary"></section>
-  <div class="students-toolbar">
-    <div class="students-search">
-      <input id="student-search" type="search" placeholder="搜索学生名单" autocomplete="off" />
-    </div>
-    <div class="students-filters">
-      <select id="student-filter-year" aria-label="筛选年级"></select>
-      <select id="student-filter-teacher" aria-label="筛选负责老师"></select>
-      <select id="student-filter-time" aria-label="筛选时间段"></select>
-      <select id="student-filter-campus" aria-label="筛选分院"></select>
-      <select id="student-filter-weekday" aria-label="筛选星期">
-        <option value="">全部星期</option>
-        <option value="MON">星期一</option>
-        <option value="TUE">星期二</option>
-        <option value="WED">星期三</option>
-        <option value="THUR">星期四</option>
-        <option value="FRI">星期五</option>
-      </select>
-      <select id="student-filter-stop" aria-label="筛选状态">
-        <option value="">全部状态</option>
-        <option value="active">Active</option>
-        <option value="stopped">Stop</option>
-      </select>
-    </div>
-    <div class="students-meta" id="students-meta">尚未加载</div>
-  </div>
   <section class="teachers-wrapper">
     <div class="panel-card">
       <h3>每月人数变化</h3>
@@ -1481,6 +1456,31 @@
 
     <div class="panel-card">
       <h3>学生名单</h3>
+      <div class="students-toolbar">
+        <div class="students-search">
+          <input id="student-search" type="search" placeholder="搜索学生名单" autocomplete="off" />
+        </div>
+        <div class="students-filters">
+          <select id="student-filter-year" aria-label="筛选年级"></select>
+          <select id="student-filter-teacher" aria-label="筛选负责老师"></select>
+          <select id="student-filter-time" aria-label="筛选时间段"></select>
+          <select id="student-filter-campus" aria-label="筛选分院"></select>
+          <select id="student-filter-weekday" aria-label="筛选星期">
+            <option value="">全部星期</option>
+            <option value="MON">星期一</option>
+            <option value="TUE">星期二</option>
+            <option value="WED">星期三</option>
+            <option value="THUR">星期四</option>
+            <option value="FRI">星期五</option>
+          </select>
+          <select id="student-filter-stop" aria-label="筛选状态">
+            <option value="">全部状态</option>
+            <option value="active">Active</option>
+            <option value="stopped">Stop</option>
+          </select>
+        </div>
+        <div class="students-meta" id="students-meta">尚未加载</div>
+      </div>
       <div class="students-table-wrap">
         <table class="students-table" id="students-table">
           <thead></thead>
