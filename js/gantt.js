@@ -1088,6 +1088,11 @@
     return studentValue(rec, month).toUpperCase();
   }
 
+  function isStudentLostInMonth(rec, prevMonth, month) {
+    const current = studentMonthValue(rec, month);
+    return studentMonthValue(rec, prevMonth) === 'ACTIVE' && Boolean(current) && current !== 'ACTIVE';
+  }
+
   function normalizedStudentYear(rec) {
     return studentValue(rec, STUDENT_FIELDS.year).toUpperCase();
   }
@@ -1108,8 +1113,7 @@
         studentMonthValue(rec, row.month) === 'ACTIVE'
       ).length,
       lost: idx === 0 ? null : list.filter((rec) =>
-        studentMonthValue(rec, visible[idx - 1].month) === 'ACTIVE' &&
-        studentMonthValue(rec, row.month) !== 'ACTIVE'
+        isStudentLostInMonth(rec, visible[idx - 1].month, row.month)
       ).length
     }));
   }
@@ -1121,8 +1125,7 @@
       studentMonthValue(rec, m.month) === 'ACTIVE'
     ).length);
     const lost = months.map((m, idx) => idx === 0 ? null : records.filter((rec) =>
-      studentMonthValue(rec, months[idx - 1].month) === 'ACTIVE' &&
-      studentMonthValue(rec, m.month) !== 'ACTIVE'
+      isStudentLostInMonth(rec, months[idx - 1].month, m.month)
     ).length);
     const latest = counts.length ? counts[counts.length - 1] : 0;
     const first = counts.length ? counts[0] : 0;
@@ -1133,10 +1136,7 @@
     if (idx <= 0 || !months[idx - 1] || !months[idx]) return [];
     const prevMonth = months[idx - 1].month;
     const month = months[idx].month;
-    return records.filter((rec) =>
-      studentMonthValue(rec, prevMonth) === 'ACTIVE' &&
-      studentMonthValue(rec, month) !== 'ACTIVE'
-    );
+    return records.filter((rec) => isStudentLostInMonth(rec, prevMonth, month));
   }
 
   function recordsForGroup(records, label, group) {
@@ -1537,8 +1537,7 @@
       if (idx === 0) return;
       const prevMonth = months[idx - 1];
       for (const rec of records) {
-        if (studentMonthValue(rec, prevMonth.month) !== 'ACTIVE') continue;
-        if (studentMonthValue(rec, month.month) === 'ACTIVE') continue;
+        if (!isStudentLostInMonth(rec, prevMonth.month, month.month)) continue;
         events.push({
           id: `${rec.recordId || studentValue(rec, STUDENT_FIELDS.no) || studentValue(rec, STUDENT_FIELDS.name)}-${month.month}`,
           rec,

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0f172a" />
 <title>DAYCARE PWA</title>
-<link rel="manifest" href="/manifest.json" />
+<link rel="manifest" href="manifest.json" />
 <style>
   :root {
     --bg: #0f172a;
@@ -1611,11 +1611,11 @@
 
 <div id="modal-root"></div>
 
-<script src="/js/gantt.js" defer></script>
+<script src="js/gantt.js" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').catch(() => {});
     });
   }
 </script>
