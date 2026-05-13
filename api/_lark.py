@@ -247,7 +247,18 @@ def parse_day_order(day_str):
     return int(m.group(1)) if m else 99
 
 
-def _parse_clock(piece):
+def _clock_suffix(piece):
+    if not piece:
+        return None
+    t = piece.strip().upper().replace(" ", "")
+    if t.endswith("AM"):
+        return "AM"
+    if t.endswith("PM"):
+        return "PM"
+    return None
+
+
+def _parse_clock(piece, default_suffix=None):
     if not piece:
         return None
     t = piece.strip().upper().replace(" ", "")
@@ -258,8 +269,11 @@ def _parse_clock(piece):
     elif t.endswith("PM"):
         suffix = "PM"
         t = t[:-2]
+    elif default_suffix:
+        suffix = default_suffix
     if not t:
         return None
+    t = t.replace(".", ":")
     if ":" in t:
         try:
             hh, mm = t.split(":", 1)
@@ -282,17 +296,40 @@ def _parse_clock(piece):
     return h * 60 + m
 
 
+def _infer_left_suffix(left, right):
+    left_suffix = _clock_suffix(left)
+    right_suffix = _clock_suffix(right)
+    if left_suffix or not right_suffix:
+        return None
+    left_text = left.strip().upper().replace(" ", "").replace(".", ":")
+    right_text = right.strip().upper().replace(" ", "").replace(".", ":")
+    try:
+        left_hour = int(left_text.split(":", 1)[0])
+        right_hour = int(re.sub(r"(AM|PM)$", "", right_text).split(":", 1)[0])
+    except ValueError:
+        return right_suffix
+    if right_suffix == "AM":
+        return "AM"
+    if left_hour == 12:
+        return "PM"
+    if right_hour == 12 and left_hour < 12:
+        return "AM"
+    return "PM"
+
+
 def parse_time_range(s):
     if not s:
         return (None, None)
     text = s.strip()
-    text = re.sub(r"^\s*\d+\.\s*", "", text)
+    text = re.sub(r"^\s*\d+\.\s+", "", text)
     for sep in ("—", "–", "～", "~", "至", "to", "TO"):
         text = text.replace(sep, "-")
     if "-" not in text:
         return (None, None)
     left, right = text.split("-", 1)
-    return (_parse_clock(left), _parse_clock(right))
+    left_minutes = _parse_clock(left, _infer_left_suffix(left, right))
+    right_minutes = _parse_clock(right)
+    return (left_minutes, right_minutes)
 
 
 def normalize_record(item):
