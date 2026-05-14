@@ -297,6 +297,13 @@
     display: flex;
     align-items: center;
   }
+  .gantt-labels .row-label.pressure-label {
+    height: 38px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(15, 23, 42, 0.28);
+  }
 
   .gantt-timeline-wrap {
     overflow-x: auto;
@@ -337,6 +344,43 @@
     background-image: linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px);
     background-size: var(--hour-w) 100%;
   }
+  .row.pressure-row {
+    height: 38px;
+    background-color: rgba(15, 23, 42, 0.18);
+  }
+
+  .pressure-segment {
+    position: absolute;
+    top: 6px;
+    height: 26px;
+    border-radius: 4px;
+    padding: 3px 6px;
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pressure-segment span {
+    font-weight: 800;
+    flex: 0 0 auto;
+  }
+  .pressure-segment small {
+    font-size: 10px;
+    opacity: 0.9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pressure-segment.normal      { background: rgba(22, 163, 74, 0.88); }
+  .pressure-segment.warning     { background: rgba(245, 158, 11, 0.92); color: #1a1a1a; }
+  .pressure-segment.overloaded  { background: rgba(220, 38, 38, 0.92); }
+  .pressure-segment.crisis      { background: rgba(127, 29, 29, 0.96); }
+  .pressure-segment.no-student  { background: rgba(100, 116, 139, 0.9); }
 
   .bar {
     position: absolute;

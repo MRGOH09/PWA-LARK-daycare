@@ -440,6 +440,57 @@
       });
   }
 
+  function buildPressureSegments(records) {
+    const valid = records.filter((rec) =>
+      rec.startMinutes != null && rec.endMinutes != null && rec.endMinutes > rec.startMinutes
+    );
+    const points = unique(valid.flatMap((rec) => [
+      Math.max(rec.startMinutes, AXIS_START),
+      Math.min(rec.endMinutes, AXIS_END)
+    ])).filter((m) => m >= AXIS_START && m <= AXIS_END)
+      .sort((a, b) => a - b);
+
+    const segments = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const start = points[i];
+      const end = points[i + 1];
+      if (end <= start) continue;
+      const active = valid.filter((rec) =>
+        rec.startMinutes <= start && rec.endMinutes >= end
+      );
+      if (!active.length) continue;
+
+      const combined = {
+        studentCount: active.reduce((sum, rec) => sum + rec.studentCount, 0),
+        daycareTeachers: unique(active.flatMap((rec) => rec.daycareTeachers || [])),
+        teachingTeachers: unique(active.flatMap((rec) => rec.teachingTeachers || [])),
+        assistants: unique(active.flatMap((rec) => rec.assistants || [])),
+        assistantTeachers: unique(active.flatMap((rec) => rec.assistantTeachers || []))
+      };
+      segments.push({ start, end, active, status: getRecordStatus(combined), combined });
+    }
+    return segments;
+  }
+
+  function renderPressureSegment(segment) {
+    const start = Math.max(segment.start, AXIS_START);
+    const end = Math.min(segment.end, AXIS_END);
+    if (end <= start) return '';
+    const left = start - AXIS_START;
+    const width = end - start;
+    const s = segment.status;
+    const teacherStr = s.teacherCount > 0 ? `T ${fmtRatio(s.teacherRatio)}:1` : 'T 无老师';
+    const manpowerStr = s.manpowerCount > 0 ? `M ${fmtRatio(s.manpowerRatio)}:1` : 'M 无人手';
+    const label = `${segment.combined.studentCount}人`;
+    const title = `${minutesToClock(start)}-${minutesToClock(end)} 合计 ${label} · ${teacherStr} / ${manpowerStr} · ${s.detail}`;
+    return `<div class="pressure-segment ${s.kind}"
+      style="left: calc(${left} * var(--minute-w)); width: calc(${width} * var(--minute-w));"
+      title="${escapeHtml(title)}">
+      <span>${escapeHtml(label)}</span>
+      <small>${escapeHtml(teacherStr)} / ${escapeHtml(manpowerStr)}</small>
+    </div>`;
+  }
+
   function renderBar(rec, idx, lane) {
     if (rec.startMinutes == null || rec.endMinutes == null || rec.endMinutes <= rec.startMinutes) return '';
     const start = Math.max(rec.startMinutes, AXIS_START);
@@ -479,6 +530,10 @@
       labelsHtml.push(`<div class="day-header">${escapeHtml(dayLabel)} · ${escapeHtml(grp.day)}</div>`);
       rowsHtml.push('<div class="day-divider"></div>');
       for (const [block, recs] of grp.blocks) {
+        const pressureSegments = buildPressureSegments(recs);
+        labelsHtml.push(`<div class="row-label pressure-label">合计 · ${escapeHtml(shortBlock(block) || block)}</div>`);
+        rowsHtml.push(`<div class="row pressure-row">${pressureSegments.map(renderPressureSegment).join('')}</div>`);
+
         const laneItems = layoutRecordLanes(recs);
         const laneCount = Math.max(1, ...laneItems.map((it) => it.lane + 1));
         const rowHeight = Math.max(56, laneCount * 52 + 4);
