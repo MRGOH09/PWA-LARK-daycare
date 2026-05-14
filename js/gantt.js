@@ -213,7 +213,7 @@
     return k ? rec[k] : [];
   }
 
-  function applyFilters(records) {
+  function applyFilters(records, options = {}) {
     const f = state.filters;
     return records.filter((rec) => {
       if (f.day && rec.day !== f.day) return false;
@@ -223,7 +223,7 @@
         if ((roleField(rec, f.role) || []).length === 0) return false;
       }
       if (!f.role && f.teacher && !recordHasTeacher(rec, '', f.teacher)) return false;
-      if (f.status) {
+      if (f.status && !options.ignoreStatus) {
         const s = getRecordStatus(rec);
         if (s.kind !== f.status) return false;
       }
@@ -342,24 +342,28 @@
   ============================================================ */
 
   function renderSummary(filtered) {
-    const total = filtered.length;
+    const segments = aggregateRecords(filtered);
+    const visibleSegments = state.filters.status
+      ? segments.filter((segment) => segment.status.kind === state.filters.status)
+      : segments;
+    const total = visibleSegments.length;
     let crisis = 0, overloaded = 0, warning = 0, noStudent = 0;
     let maxTeacherRatio = 0, maxManpowerRatio = 0;
-    let maxTeacherRecord = null, maxManpowerRecord = null;
-    for (const rec of filtered) {
-      const s = getRecordStatus(rec);
+    let maxTeacherSegment = null, maxManpowerSegment = null;
+    for (const segment of visibleSegments) {
+      const s = segment.status;
       if (s.kind === 'crisis') crisis++;
       else if (s.kind === 'overloaded') overloaded++;
       else if (s.kind === 'warning') warning++;
       else if (s.kind === 'no-student') noStudent++;
-      if (rec.studentCount > 0) {
+      if (segment.studentCount > 0) {
         if (isFinite(s.teacherRatio) && s.teacherRatio > maxTeacherRatio) {
           maxTeacherRatio = s.teacherRatio;
-          maxTeacherRecord = rec;
+          maxTeacherSegment = segment;
         }
         if (isFinite(s.manpowerRatio) && s.manpowerRatio > maxManpowerRatio) {
           maxManpowerRatio = s.manpowerRatio;
-          maxManpowerRecord = rec;
+          maxManpowerSegment = segment;
         }
       }
     }
@@ -369,8 +373,8 @@
       { label: '超标时段数', value: overloaded, cls: 'overloaded', action: 'status', status: 'overloaded' },
       { label: '警戒时段数', value: warning, cls: 'warning', action: 'status', status: 'warning' },
       { label: '无学生时段数', value: noStudent, cls: 'no-student', action: 'status', status: 'no-student' },
-      { label: '最高老师学生比', value: maxTeacherRatio > 0 ? `${fmtRatio(maxTeacherRatio)}:1` : '—', cls: '', action: 'record', record: maxTeacherRecord },
-      { label: '最高人手学生比', value: maxManpowerRatio > 0 ? `${fmtRatio(maxManpowerRatio)}:1` : '—', cls: '', action: 'record', record: maxManpowerRecord }
+      { label: '最高老师学生比', value: maxTeacherRatio > 0 ? `${fmtRatio(maxTeacherRatio)}:1` : '—', cls: '', action: 'segment', segment: maxTeacherSegment },
+      { label: '最高人手学生比', value: maxManpowerRatio > 0 ? `${fmtRatio(maxManpowerRatio)}:1` : '—', cls: '', action: 'segment', segment: maxManpowerSegment }
     ];
     elSummary.innerHTML = cards.map((c, idx) => `
       <div class="card ${c.cls} clickable ${c.action === 'status' && state.filters.status === c.status ? 'active' : ''}"
@@ -387,8 +391,8 @@
           state.filters.status = card.status;
           elStatus.value = card.status;
           rerender();
-        } else if (card.record) {
-          openSlotDetail(card.record);
+        } else if (card.segment) {
+          openAggregateDetail(card.segment);
         }
       });
     });
@@ -421,26 +425,12 @@
     }));
   }
 
-  function layoutRecordLanes(records) {
-    const lanes = [];
-    return records
-      .slice()
-      .sort((a, b) => ((a.startMinutes ?? 99999) - (b.startMinutes ?? 99999)) || ((a.endMinutes ?? 99999) - (b.endMinutes ?? 99999)))
-      .map((rec) => {
-        const start = rec.startMinutes ?? 0;
-        const end = rec.endMinutes ?? start;
-        let lane = lanes.findIndex((laneEnd) => start >= laneEnd);
-        if (lane === -1) {
-          lane = lanes.length;
-          lanes.push(end);
-        } else {
-          lanes[lane] = end;
-        }
-        return { rec, lane };
-      });
+  function aggregateRecords(records) {
+    return groupByDayAndBlock(records)
+      .flatMap((grp) => grp.blocks.flatMap(([block, recs]) => buildAggregateSegments(grp.day, block, recs)));
   }
 
-  function buildPressureSegments(records) {
+  function buildAggregateSegments(day, block, records) {
     const valid = records.filter((rec) =>
       rec.startMinutes != null && rec.endMinutes != null && rec.endMinutes > rec.startMinutes
     );
@@ -455,60 +445,46 @@
       const start = points[i];
       const end = points[i + 1];
       if (end <= start) continue;
-      const active = valid.filter((rec) =>
-        rec.startMinutes <= start && rec.endMinutes >= end
-      );
-      if (!active.length) continue;
-
-      const combined = {
-        studentCount: active.reduce((sum, rec) => sum + rec.studentCount, 0),
-        daycareTeachers: unique(active.flatMap((rec) => rec.daycareTeachers || [])),
-        teachingTeachers: unique(active.flatMap((rec) => rec.teachingTeachers || [])),
-        assistants: unique(active.flatMap((rec) => rec.assistants || [])),
-        assistantTeachers: unique(active.flatMap((rec) => rec.assistantTeachers || []))
+      const sources = valid.filter((rec) => rec.startMinutes <= start && rec.endMinutes >= end);
+      if (!sources.length) continue;
+      const segment = {
+        day,
+        dayOrder: parseInt(day) || 99,
+        block,
+        timeRange: `${minutesToClock(start)}-${minutesToClock(end)}`,
+        startMinutes: start,
+        endMinutes: end,
+        studentCount: Math.max(...sources.map((rec) => rec.studentCount || 0)),
+        daycareTeachers: unique(sources.flatMap((rec) => rec.daycareTeachers || [])),
+        teachingTeachers: unique(sources.flatMap((rec) => rec.teachingTeachers || [])),
+        assistants: unique(sources.flatMap((rec) => rec.assistants || [])),
+        assistantTeachers: unique(sources.flatMap((rec) => rec.assistantTeachers || [])),
+        sources
       };
-      segments.push({ start, end, active, status: getRecordStatus(combined), combined });
+      segment.status = getRecordStatus(segment);
+      segments.push(segment);
     }
     return segments;
   }
 
-  function renderPressureSegment(segment) {
-    const start = Math.max(segment.start, AXIS_START);
-    const end = Math.min(segment.end, AXIS_END);
+  function renderAggregateBar(segment, idx) {
+    const start = Math.max(segment.startMinutes, AXIS_START);
+    const end = Math.min(segment.endMinutes, AXIS_END);
     if (end <= start) return '';
     const left = start - AXIS_START;
     const width = end - start;
-    const s = segment.status;
-    const teacherStr = s.teacherCount > 0 ? `T ${fmtRatio(s.teacherRatio)}:1` : 'T 无老师';
-    const manpowerStr = s.manpowerCount > 0 ? `M ${fmtRatio(s.manpowerRatio)}:1` : 'M 无人手';
-    const label = `${segment.combined.studentCount}人`;
-    const title = `${minutesToClock(start)}-${minutesToClock(end)} 合计 ${label} · ${teacherStr} / ${manpowerStr} · ${s.detail}`;
-    return `<div class="pressure-segment ${s.kind}"
-      style="left: calc(${left} * var(--minute-w)); width: calc(${width} * var(--minute-w));"
-      title="${escapeHtml(title)}">
-      <span>${escapeHtml(label)}</span>
-      <small>${escapeHtml(teacherStr)} / ${escapeHtml(manpowerStr)}</small>
-    </div>`;
-  }
-
-  function renderBar(rec, idx, lane) {
-    if (rec.startMinutes == null || rec.endMinutes == null || rec.endMinutes <= rec.startMinutes) return '';
-    const start = Math.max(rec.startMinutes, AXIS_START);
-    const end = Math.min(rec.endMinutes, AXIS_END);
-    if (end <= start) return '';
-    const left = start - AXIS_START;
-    const width = end - start;
-    const status = getRecordStatus(rec);
+    const status = segment.status;
 
     const teacherStr = status.teacherCount > 0 ? `T ${fmtRatio(status.teacherRatio)}:1` : 'T 无老师';
     const manpowerStr = status.manpowerCount > 0 ? `M ${fmtRatio(status.manpowerRatio)}:1` : 'M 无人手';
-    const block = shortBlock(rec.block) || rec.block;
+    const block = shortBlock(segment.block) || segment.block;
+    const sourceHint = segment.sources.length > 1 ? ` · ${segment.sources.length}笔` : '';
 
-    return `<div class="bar ${status.kind}" data-idx="${idx}"
-      style="left: calc(${left} * var(--minute-w)); width: calc(${width} * var(--minute-w)); top: ${4 + lane * 52}px; bottom: auto; height: 48px;"
-      title="${escapeHtml(rec.day)} ${escapeHtml(rec.block)} ${escapeHtml(rec.timeRange)}">
+    return `<div class="bar aggregate ${status.kind}" data-agg-idx="${idx}"
+      style="left: calc(${left} * var(--minute-w)); width: calc(${width} * var(--minute-w)); top: 4px; bottom: auto; height: 48px;"
+      title="${escapeHtml(segment.day)} ${escapeHtml(segment.block)} ${escapeHtml(segment.timeRange)}${escapeHtml(sourceHint)}">
       <div class="b1">${escapeHtml(block)}</div>
-      <div class="b2">${escapeHtml(rec.studentCount + '人')}</div>
+      <div class="b2">${escapeHtml(segment.studentCount + '人' + sourceHint)}</div>
       <div class="b3">${escapeHtml(teacherStr)} / ${escapeHtml(manpowerStr)}</div>
     </div>`;
   }
@@ -519,8 +495,7 @@
       return;
     }
     const groups = groupByDayAndBlock(filtered);
-    const indexMap = new Map();
-    filtered.forEach((rec, i) => indexMap.set(rec, i));
+    const aggregateSegments = [];
 
     const labelsHtml = ['<div class="axis-spacer"></div>'];
     const rowsHtml = [];
@@ -530,17 +505,20 @@
       labelsHtml.push(`<div class="day-header">${escapeHtml(dayLabel)} · ${escapeHtml(grp.day)}</div>`);
       rowsHtml.push('<div class="day-divider"></div>');
       for (const [block, recs] of grp.blocks) {
-        const pressureSegments = buildPressureSegments(recs);
-        labelsHtml.push(`<div class="row-label pressure-label">合计 · ${escapeHtml(shortBlock(block) || block)}</div>`);
-        rowsHtml.push(`<div class="row pressure-row">${pressureSegments.map(renderPressureSegment).join('')}</div>`);
-
-        const laneItems = layoutRecordLanes(recs);
-        const laneCount = Math.max(1, ...laneItems.map((it) => it.lane + 1));
-        const rowHeight = Math.max(56, laneCount * 52 + 4);
-        labelsHtml.push(`<div class="row-label" style="height:${rowHeight}px">${escapeHtml(shortBlock(block))}</div>`);
-        const bars = laneItems.map(({ rec, lane }) => renderBar(rec, indexMap.get(rec), lane)).join('');
-        rowsHtml.push(`<div class="row" style="height:${rowHeight}px">${bars}</div>`);
+        const segments = buildAggregateSegments(grp.day, block, recs)
+          .filter((segment) => !state.filters.status || segment.status.kind === state.filters.status);
+        if (!segments.length) continue;
+        const startIndex = aggregateSegments.length;
+        aggregateSegments.push(...segments);
+        labelsHtml.push(`<div class="row-label">${escapeHtml(shortBlock(block))}</div>`);
+        const bars = segments.map((segment, i) => renderAggregateBar(segment, startIndex + i)).join('');
+        rowsHtml.push(`<div class="row">${bars}</div>`);
       }
+    }
+
+    if (!aggregateSegments.length) {
+      elGantt.innerHTML = '<div class="empty-state">没有匹配的记录。</div>';
+      return;
     }
 
     elGantt.innerHTML = `
@@ -557,8 +535,8 @@
 
     elGantt.querySelectorAll('.bar').forEach((el) => {
       el.addEventListener('click', () => {
-        const idx = parseInt(el.getAttribute('data-idx'));
-        if (!isNaN(idx) && filtered[idx]) openSlotDetail(filtered[idx]);
+        const idx = parseInt(el.getAttribute('data-agg-idx'));
+        if (!isNaN(idx) && aggregateSegments[idx]) openAggregateDetail(aggregateSegments[idx]);
       });
     });
   }
@@ -2052,6 +2030,71 @@
     });
   }
 
+  function openAggregateDetail(segment) {
+    const s = segment.status;
+    const teacherLink = (name) => `<span class="teacher-link" data-teacher="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
+    const dash = (arr) => (arr && arr.length)
+      ? arr.map(teacherLink).join('、')
+      : '<span style="color:var(--muted)">-</span>';
+    const teacherRatioStr = s.teacherCount > 0 ? `${fmtRatio(s.teacherRatio)} : 1` : '— (无老师)';
+    const manpowerRatioStr = s.manpowerCount > 0 ? `${fmtRatio(s.manpowerRatio)} : 1` : '— (无人手)';
+    const sourceRows = segment.sources.map((rec, idx) => {
+      const recStatus = getRecordStatus(rec);
+      return `
+        <button class="source-record" type="button" data-source-idx="${idx}">
+          <span>${escapeHtml(rec.timeRange || '-')} · ${escapeHtml(String(rec.studentCount))}人</span>
+          <small>${escapeHtml(recStatus.detail)}</small>
+        </button>
+      `;
+    }).join('');
+
+    state.modalOpen = true;
+    elModalRoot.innerHTML = `
+      <div class="modal-backdrop" id="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true">
+          <h2>${escapeHtml(segment.day)} · ${escapeHtml(segment.block)} 合计</h2>
+          <dl>
+            <dt>时间片</dt><dd>${escapeHtml(segment.timeRange)}</dd>
+            <dt>学生人数</dt><dd>${escapeHtml(String(segment.studentCount))} <span style="color:var(--muted)">（重叠记录取最大值）</span></dd>
+            <dt>来源记录</dt><dd>${segment.sources.length} 笔</dd>
+            <dt>DAYCARE老师</dt><dd>${dash(segment.daycareTeachers)}</dd>
+            <dt>教书老师</dt><dd>${dash(segment.teachingTeachers)}</dd>
+            <dt>助理</dt><dd>${dash(segment.assistants)}</dd>
+            <dt>助教</dt><dd>${dash(segment.assistantTeachers)}</dd>
+            <dt>老师学生比</dt><dd>${escapeHtml(teacherRatioStr)}</dd>
+            <dt>人手学生比</dt><dd>${escapeHtml(manpowerRatioStr)}</dd>
+            <dt>状态</dt><dd><span class="status-pill ${s.kind}" style="background: var(--status-${s.kind})">${escapeHtml(s.detail)}</span></dd>
+          </dl>
+          <h3 style="margin: 16px 0 6px; font-size: 13px; color: var(--muted)">来源记录（点击可编辑单笔）</h3>
+          <div class="source-list">${sourceRows}</div>
+          <div class="actions">
+            <button id="modal-close" type="button">关闭</button>
+          </div>
+        </div>
+      </div>
+    `;
+    bindModalCommon();
+    elModalRoot.querySelectorAll('[data-source-idx]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.getAttribute('data-source-idx'));
+        if (!isNaN(idx) && segment.sources[idx]) {
+          closeModal();
+          openSlotDetail(segment.sources[idx]);
+        }
+      });
+    });
+    elModalRoot.querySelectorAll('[data-teacher]').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const name = el.getAttribute('data-teacher');
+        closeModal();
+        switchView('teachers');
+        const stats = computeTeacherStats(applyFilters(state.records, { ignoreStatus: true }));
+        openTeacherDetail(name, stats);
+      });
+    });
+  }
+
   function defaultNewRecord() {
     const day = state.filters.day || '1.MON';
     const block = state.filters.block || (allBlocks()[0] || '');
@@ -2483,11 +2526,12 @@
   }
 
   function rerender() {
-    const filtered = applyFilters(state.records);
     if (state.view === 'gantt') {
+      const filtered = applyFilters(state.records, { ignoreStatus: true });
       renderSummary(filtered);
       renderGantt(filtered);
     } else if (state.view === 'teachers') {
+      const filtered = applyFilters(state.records);
       renderTeachersView(filtered);
     } else if (state.view === 'students') {
       renderStudentsView();

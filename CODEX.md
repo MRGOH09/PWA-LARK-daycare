@@ -1308,19 +1308,31 @@ Backend:
 * If a teacher is already bound to another role, update/create is rejected
 * If existing Lark data already has a teacher in multiple roles, the API rejects and asks to clean Lark data first
 
-## Gantt Rendering Fix
+## Gantt Aggregate Rendering
 
-Overlapping time slots inside the same day + BLOCK are now stacked into lanes.
+The Gantt chart now renders same-day + same-BLOCK overlaps in aggregate mode.
 
 Reason:
 
-* HM BLOCK A can have newly added time ranges overlapping existing ranges
-* Old rendering placed every bar in one row, so a new bar could be hidden behind another bar
+* Some Lark rows are not separate student groups; they are extra coverage for the same student group.
+* Example: `4:00-7:00 88人` plus `5:00-7:00 88人` means the 5:00-7:00 slot has extra manpower, not 176 students.
+* Do not sum student counts across overlapping rows by default.
 
 Current behavior:
 
-* `layoutRecordLanes()` assigns overlapping records to separate vertical lanes
-* Row height expands automatically
+* `buildAggregateSegments()` slices each day + BLOCK into non-overlapping time segments.
+* For each segment, student count is the maximum student count from active source records.
+* For each segment, DAYCARE老师 / 教书老师 / 助理 / 助教 are merged and de-duplicated.
+* The Gantt row shows only aggregate segments, not stacked raw records.
+* Segment labels show source count when multiple Lark records contribute, such as `88人 · 2笔`.
+* Clicking an aggregate segment opens an aggregate detail modal with merged ratios and source records.
+* Clicking a source record inside the aggregate modal opens the original editable slot modal.
+* Summary cards in the Gantt view also use aggregate segments so warning/crisis counts match what users see.
+
+Important:
+
+* Never show `88 + 88 = 176` for overlapping coverage rows unless a future explicit field marks them as separate student groups.
+* If future requirements need true additive groups, add a dedicated Lark field such as `人数合并方式` / `Group ID` before changing this logic.
 
 ## Lark Permission Notes
 
