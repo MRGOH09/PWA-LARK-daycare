@@ -11,10 +11,16 @@
     --bg: #0f172a;
     --panel: #1e293b;
     --panel-2: #273449;
+    --panel-3: #111827;
     --border: #334155;
     --text: #e2e8f0;
     --muted: #94a3b8;
     --accent: #38bdf8;
+    --good: #34d399;
+    --bad: #f87171;
+    --koko: #a78bfa;
+    --home: #22c55e;
+    --idle: #64748b;
 
     --status-normal: #16a34a;
     --status-warning: #f59e0b;
@@ -1096,6 +1102,443 @@
     max-height: 300px;
   }
 
+  /* ========== Attendance View ========== */
+  .attendance-wrapper {
+    display: grid;
+    gap: 12px;
+  }
+  .attendance-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .attendance-filter-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .attendance-filter-grid select,
+  .attendance-filter-grid input {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    min-width: 132px;
+  }
+  .attendance-filter-grid input {
+    min-width: 190px;
+  }
+  .attendance-layout {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+  }
+  .attendance-scope {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px;
+  }
+  .attendance-scope h3 {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .attendance-scope dl {
+    display: grid;
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 8px 10px;
+    margin: 0;
+    font-size: 13px;
+  }
+  .attendance-scope dt {
+    color: var(--muted);
+  }
+  .attendance-scope dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .attendance-list {
+    display: block;
+    min-width: 0;
+  }
+  .attendance-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px;
+    display: grid;
+    gap: 10px;
+  }
+  .attendance-card.marked {
+    border-color: rgba(56, 189, 248, 0.62);
+    box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.12);
+  }
+  .attendance-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+  }
+  .attendance-name {
+    min-width: 0;
+  }
+  .attendance-name strong {
+    display: block;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  .attendance-name span,
+  .attendance-meta-line {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .attendance-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.14);
+    color: var(--accent);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .attendance-step {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding-top: 8px;
+    border-top: 1px solid rgba(51,65,85,0.72);
+  }
+  .attendance-step:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .attendance-step-label {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 28px;
+  }
+  .attendance-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .attendance-option {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 5px 9px;
+    min-height: 28px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .attendance-option:hover {
+    border-color: var(--accent);
+  }
+  .attendance-option.active {
+    color: #07111f;
+    border-color: transparent;
+  }
+  .attendance-option.active.idle { background: var(--idle); color: #fff; }
+  .attendance-option.active.good { background: var(--good); }
+  .attendance-option.active.warn { background: var(--status-warning); }
+  .attendance-option.active.bad { background: var(--bad); }
+  .attendance-option.active.koko { background: var(--koko); }
+  .attendance-option.active.home { background: var(--home); }
+  .attendance-note-row {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 8px;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1px solid rgba(51,65,85,0.72);
+  }
+  .attendance-note-row label {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .attendance-note-row input {
+    width: 100%;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+  .attendance-empty {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    padding: 28px 16px;
+    text-align: center;
+  }
+  .attendance-flow-list {
+    display: grid;
+    gap: 8px;
+  }
+  .attendance-flow-row {
+    display: grid;
+    grid-template-columns: 82px minmax(0, 1fr) 44px;
+    gap: 8px;
+    align-items: center;
+    font-size: 12px;
+  }
+  .attendance-flow-row span:first-child {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .attendance-flow-track {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.58);
+    overflow: hidden;
+  }
+  .attendance-flow-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+  .attendance-flow-row b {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .attendance-alert-list {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .attendance-alert-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid rgba(251, 191, 36, 0.24);
+    border-radius: 7px;
+    background: rgba(251, 191, 36, 0.08);
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+  .attendance-alert-item strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .attendance-alert-item span {
+    color: var(--status-warning);
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .attendance-list-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 8px;
+  }
+  .attendance-list-head h3 {
+    margin: 0;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .attendance-list-meta {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: right;
+  }
+  .attendance-board-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    overflow: auto;
+    max-height: 72vh;
+    -webkit-overflow-scrolling: touch;
+  }
+  .attendance-board {
+    width: 100%;
+    min-width: 1040px;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+  }
+  .attendance-board th,
+  .attendance-board td {
+    border-bottom: 1px solid rgba(51, 65, 85, 0.76);
+    padding: 8px 9px;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .attendance-board thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .attendance-board th:first-child,
+  .attendance-board td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 190px;
+    background: #1b273a;
+    box-shadow: 1px 0 0 rgba(51, 65, 85, 0.86);
+  }
+  .attendance-board thead th:first-child {
+    z-index: 3;
+    background: var(--panel-2);
+  }
+  .attendance-board tbody tr.marked td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent), 1px 0 0 rgba(51, 65, 85, 0.86);
+  }
+  .attendance-board tbody tr:hover td {
+    background: rgba(39, 52, 73, 0.86);
+  }
+  .attendance-board tbody tr:hover td:first-child {
+    background: #223149;
+  }
+  .attendance-student-cell {
+    display: grid;
+    gap: 2px;
+    min-width: 176px;
+  }
+  .attendance-student-cell button {
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    padding: 0;
+    text-align: left;
+    font-weight: 900;
+    cursor: pointer;
+  }
+  .attendance-student-cell button:hover {
+    color: var(--accent);
+  }
+  .attendance-student-cell span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .attendance-status-pill,
+  .attendance-note-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 70px;
+    min-height: 30px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.42);
+    color: var(--muted);
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+  .attendance-status-pill.good {
+    background: rgba(52, 211, 153, 0.18);
+    border-color: rgba(52, 211, 153, 0.38);
+    color: var(--good);
+  }
+  .attendance-status-pill.warn {
+    background: rgba(251, 191, 36, 0.18);
+    border-color: rgba(251, 191, 36, 0.38);
+    color: var(--status-warning);
+  }
+  .attendance-status-pill.bad {
+    background: rgba(248, 113, 113, 0.18);
+    border-color: rgba(248, 113, 113, 0.4);
+    color: var(--bad);
+  }
+  .attendance-status-pill.koko {
+    background: rgba(167, 139, 250, 0.18);
+    border-color: rgba(167, 139, 250, 0.4);
+    color: var(--koko);
+  }
+  .attendance-status-pill.home {
+    background: rgba(34, 197, 94, 0.18);
+    border-color: rgba(34, 197, 94, 0.4);
+    color: var(--home);
+  }
+  .attendance-status-pill.idle {
+    background: rgba(100, 116, 139, 0.16);
+    color: #cbd5e1;
+  }
+  .attendance-status-pill:hover,
+  .attendance-note-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .attendance-note-btn.has-note {
+    border-color: rgba(56, 189, 248, 0.42);
+    color: var(--accent);
+    background: rgba(56, 189, 248, 0.12);
+  }
+  .attendance-choice-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    background: transparent;
+  }
+  .attendance-choice-menu {
+    position: fixed;
+    z-index: 121;
+    width: 206px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--panel);
+    box-shadow: 0 16px 42px rgba(0,0,0,0.46);
+    padding: 8px;
+  }
+  .attendance-choice-title {
+    color: var(--muted);
+    font-size: 12px;
+    padding: 3px 4px 8px;
+  }
+  .attendance-choice-menu button {
+    width: 100%;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text);
+    padding: 8px 9px;
+    text-align: left;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .attendance-choice-menu button:hover,
+  .attendance-choice-menu button.active {
+    background: var(--panel-2);
+    color: var(--accent);
+  }
+
   .role-pill {
     display: inline-block;
     padding: 2px 8px;
@@ -1379,11 +1822,32 @@
   .view-section { display: block; }
   .view-section[hidden] { display: none; }
 
+  @media (max-width: 920px) {
+    .attendance-layout { grid-template-columns: 1fr; }
+  }
+
   @media (max-width: 720px) {
     .edit-grid { grid-template-columns: 1fr; }
     .role-modal-grid,
     .role-modal-columns,
     .student-analysis-grid { grid-template-columns: 1fr; }
+    .attendance-layout { grid-template-columns: 1fr; }
+    .attendance-filter-grid,
+    .attendance-filter-grid select,
+    .attendance-filter-grid input { width: 100%; min-width: 0; }
+    .attendance-list-head {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .attendance-list-meta {
+      text-align: left;
+    }
+    .attendance-board-wrap {
+      max-height: none;
+    }
+    .attendance-board {
+      min-width: 980px;
+    }
     .teachers-table th, .teachers-table td { padding: 6px 6px; font-size: 12px; }
     .teachers-table td.bar-cell { width: 120px; }
     .role-workload-grid { grid-template-columns: 1fr; }
@@ -1411,6 +1875,16 @@
     .legend { padding: 0 14px 8px; }
     .gantt-wrapper { padding: 0 8px 20px; }
     .teachers-wrapper { padding: 0 12px 20px; }
+    .attendance-step,
+    .attendance-note-row { grid-template-columns: 1fr; }
+    .attendance-step-label { line-height: 1.3; }
+    .attendance-choice-menu {
+      left: 12px !important;
+      right: 12px;
+      top: auto !important;
+      bottom: 12px;
+      width: auto;
+    }
     .filters select, .filters input[type="number"] { font-size: 12px; }
   }
 </style>
@@ -1428,6 +1902,7 @@
   <button data-view="teachers" type="button">老师工作量</button>
   <button data-view="students" type="button">学生名单</button>
   <button data-view="stops" type="button">停步名单</button>
+  <button data-view="attendance" type="button">点名</button>
 </nav>
 
 <section class="filters">
@@ -1632,9 +2107,50 @@
   </section>
 </div>
 
+<!-- ========== Attendance View ========== -->
+<div id="view-attendance" class="view-section" hidden>
+  <section class="summary" id="attendance-summary"></section>
+  <section class="teachers-wrapper attendance-wrapper">
+    <div class="attendance-toolbar">
+      <div class="attendance-filter-grid">
+        <input id="attendance-date" type="date" aria-label="点名日期" />
+        <select id="attendance-filter-campus" aria-label="点名地点"></select>
+        <select id="attendance-filter-block" aria-label="点名 BLOCK"></select>
+        <select id="attendance-filter-time" aria-label="点名时间段"></select>
+        <input id="attendance-search" type="search" placeholder="搜索学生" autocomplete="off" />
+      </div>
+      <div class="students-meta" id="attendance-meta">尚未加载</div>
+    </div>
+
+    <div class="attendance-layout">
+      <aside class="attendance-scope">
+        <h3>当前范围</h3>
+        <dl>
+          <dt>日期</dt><dd id="attendance-scope-date">今天</dd>
+          <dt>礼拜</dt><dd id="attendance-scope-weekday">-</dd>
+          <dt>在哪里</dt><dd id="attendance-scope-campus">全部</dd>
+          <dt>BLOCK</dt><dd id="attendance-scope-block">全部</dd>
+          <dt>时间段</dt><dd id="attendance-scope-time">全部</dd>
+        </dl>
+        <h3 style="margin-top:16px;">流程进度</h3>
+        <div class="attendance-flow-list" id="attendance-flow-list"></div>
+      </aside>
+      <section class="attendance-list">
+        <div class="attendance-list-head">
+          <h3>学生点名</h3>
+          <div class="attendance-list-meta" id="attendance-list-meta">尚未加载</div>
+        </div>
+        <div id="attendance-list">
+          <div class="attendance-empty">加载学生名单中…</div>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+
 <div id="modal-root"></div>
 
-<script src="js/gantt.js" defer></script>
+<script src="js/gantt.js?v=attendance-date-v32" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

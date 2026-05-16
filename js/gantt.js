@@ -5,6 +5,7 @@
   const AXIS_END = 1320;
   const AUTO_REFRESH_MS = 30 * 1000;
   const STUDENTS_CACHE_KEY = 'daycare-students-cache-v1';
+  const ATTENDANCE_CACHE_KEY = 'daycare-attendance-draft-v1';
   const DEFAULT_TEACHER_THRESHOLD = 30;
   const DEFAULT_MANPOWER_THRESHOLD = 15;
   const DAY_LABELS = {
@@ -45,10 +46,20 @@
     year: 'YEAR / FORM',
     teacher: '负责老师',
     time: '时间段',
+    block: 'BLOCK',
     note: 'Text 3',
     campus: '分院',
     stopMonth: 'Stop 月份'
   };
+  const ATTENDANCE_STEPS = [
+    { key: 'arrival', label: '到了补习中心', defaultValue: '未点', options: ['未点', '到了', '还没有', '缺席', 'KOKO'] },
+    { key: 'tuition', label: '去补习了', defaultValue: '未点', options: ['未点', '去了', '迟进补习'] },
+    { key: 'shower', label: '冲凉了', defaultValue: '未点', options: ['未点', '冲了', '不冲凉'] },
+    { key: 'meal', label: '吃饭', defaultValue: '未点', options: ['未点', '吃饭了', '不吃饭'] },
+    { key: 'homework', label: '功课完成', defaultValue: '未点', options: ['未点', '完成了', '没完成'] },
+    { key: 'extra', label: 'extra复习', defaultValue: '未点', options: ['未点', 'extra复习了', '没有复习'] },
+    { key: 'home', label: '回家', defaultValue: '未回家', options: ['未回家', '回家'] }
+  ];
   const STUDENT_WEEKDAYS = [
     { key: 'MON', label: '一' },
     { key: 'TUE', label: '二' },
@@ -76,6 +87,14 @@
     studentFilters: { year: '', teacher: '', time: '', campus: '', weekday: '', stop: '' },
     stopSearch: '',
     stopFilters: { month: '', teacher: '', year: '', campus: '' },
+    attendance: {},
+    attendanceDate: todayDateString(),
+    attendanceSearch: '',
+    attendanceFilters: { campus: '', block: '', time: '' },
+    attendanceLoaded: false,
+    attendanceSavingKeys: new Set(),
+    attendanceSyncText: '尚未同步点名记录',
+    lastAttendanceHash: '',
     updatedAt: null,
     teacherThreshold: DEFAULT_TEACHER_THRESHOLD,
     manpowerThreshold: DEFAULT_MANPOWER_THRESHOLD,
@@ -133,12 +152,28 @@
   const elStopsMeta = $('#stops-meta');
   const elStopsMonthly = $('#stops-monthly');
   const elStopsTable = $('#stops-table');
+  const elAttendanceSummary = $('#attendance-summary');
+  const elAttendanceDate = $('#attendance-date');
+  const elAttendanceCampus = $('#attendance-filter-campus');
+  const elAttendanceBlock = $('#attendance-filter-block');
+  const elAttendanceTime = $('#attendance-filter-time');
+  const elAttendanceSearch = $('#attendance-search');
+  const elAttendanceMeta = $('#attendance-meta');
+  const elAttendanceScopeDate = $('#attendance-scope-date');
+  const elAttendanceScopeWeekday = $('#attendance-scope-weekday');
+  const elAttendanceScopeCampus = $('#attendance-scope-campus');
+  const elAttendanceScopeBlock = $('#attendance-scope-block');
+  const elAttendanceScopeTime = $('#attendance-scope-time');
+  const elAttendanceFlowList = $('#attendance-flow-list');
+  const elAttendanceListMeta = $('#attendance-list-meta');
+  const elAttendanceList = $('#attendance-list');
   const elMeta = $('#meta');
   const elModalRoot = $('#modal-root');
   const elViewGantt = $('#view-gantt');
   const elViewTeachers = $('#view-teachers');
   const elViewStudents = $('#view-students');
   const elViewStops = $('#view-stops');
+  const elViewAttendance = $('#view-attendance');
 
   function escapeHtml(s) {
     if (s === null || s === undefined) return '';
@@ -1824,6 +1859,477 @@
     }
   }
 
+  /* ============================================================
+     ATTENDANCE VIEW
+  ============================================================ */
+
+  function todayDateString() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kuala_Lumpur',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${byType.year}-${byType.month}-${byType.day}`;
+  }
+
+  function loadAttendanceCache() {
+    try {
+      const raw = localStorage.getItem(ATTENDANCE_CACHE_KEY);
+      state.attendance = raw ? JSON.parse(raw) || {} : {};
+    } catch {
+      state.attendance = {};
+    }
+  }
+
+  function saveAttendanceCache() {
+    try {
+      localStorage.setItem(ATTENDANCE_CACHE_KEY, JSON.stringify(state.attendance));
+    } catch {}
+  }
+
+  function attendanceDateWeekday() {
+    const date = new Date(`${state.attendanceDate}T12:00:00+08:00`);
+    const idx = date.getDay();
+    const labels = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    return labels[idx] || '-';
+  }
+
+  function attendanceDateWeekdayKey() {
+    const date = new Date(`${state.attendanceDate}T12:00:00+08:00`);
+    const keys = ['', 'MON', 'TUE', 'WED', 'THUR', 'FRI', ''];
+    return keys[date.getDay()] || '';
+  }
+
+  function attendanceTimeSegment(rec) {
+    const raw = studentValue(rec, STUDENT_FIELDS.time);
+    const text = raw.toLowerCase();
+    if (raw.includes('早') || text.includes('morning') || text.includes('am')) return '早上';
+    if (raw.includes('下') || text.includes('afternoon') || text.includes('pm')) return '下午';
+    return raw || '未填时间段';
+  }
+
+  function attendanceStudentId(rec) {
+    return rec.recordId || studentValue(rec, STUDENT_FIELDS.no) || studentValue(rec, STUDENT_FIELDS.name);
+  }
+
+  function attendanceKey(rec) {
+    return [state.attendanceDate, attendanceStudentId(rec)].join('|');
+  }
+
+  function attendanceKeyFromRecord(record) {
+    return [record.date || state.attendanceDate, record.studentRecordId || record.studentNo || record.studentName].join('|');
+  }
+
+  function defaultAttendanceRecord() {
+    return ATTENDANCE_STEPS.reduce((out, step) => {
+      out[step.key] = step.defaultValue;
+      return out;
+    }, { note: '', updatedAt: '' });
+  }
+
+  function attendanceRecordFor(rec) {
+    const key = attendanceKey(rec);
+    return Object.assign(defaultAttendanceRecord(), state.attendance[key] || {});
+  }
+
+  function updateAttendanceByKey(key, patch, options = {}) {
+    state.attendance[key] = Object.assign(defaultAttendanceRecord(), state.attendance[key] || {}, patch, {
+      updatedAt: new Date().toISOString()
+    });
+    saveAttendanceCache();
+    renderAttendanceView();
+    if (options.persist) {
+      persistAttendanceRecord(options.student, key);
+    }
+  }
+
+  function updateAttendanceForStudent(rec, patch) {
+    updateAttendanceByKey(attendanceKey(rec), patch, { persist: true, student: rec });
+  }
+
+  function applyAttendancePayload(data) {
+    const next = {};
+    for (const record of data.records || []) {
+      const key = attendanceKeyFromRecord(record);
+      next[key] = Object.assign(defaultAttendanceRecord(), record);
+    }
+    state.attendance = next;
+    state.attendanceDate = data.date || state.attendanceDate;
+    state.attendanceLoaded = true;
+    state.lastAttendanceHash = String(data.count || 0) + '|' + (data.updatedAt || '');
+    state.attendanceSyncText = `已同步 Lark · ${data.updatedAt || '-'}`;
+    saveAttendanceCache();
+    if (state.view === 'attendance') renderAttendanceView();
+  }
+
+  function attendanceStudentPayload(rec) {
+    return {
+      recordId: attendanceStudentId(rec),
+      no: studentValue(rec, STUDENT_FIELDS.no),
+      name: studentValue(rec, STUDENT_FIELDS.name),
+      year: studentValue(rec, STUDENT_FIELDS.year),
+      block: studentValue(rec, STUDENT_FIELDS.block),
+      campus: studentValue(rec, STUDENT_FIELDS.campus),
+      teacher: studentValue(rec, STUDENT_FIELDS.teacher),
+      period: attendanceTimeSegment(rec)
+    };
+  }
+
+  async function persistAttendanceRecord(rec, key) {
+    if (!rec || !key) return;
+    state.attendanceSavingKeys.add(key);
+    state.attendanceSyncText = '保存中…';
+    renderAttendanceView();
+    try {
+      const resp = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: state.attendanceDate,
+          weekday: attendanceDateWeekdayKey(),
+          student: attendanceStudentPayload(rec),
+          attendance: attendanceRecordFor(rec)
+        })
+      });
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { throw new Error('返回非 JSON 数据'); }
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      const record = data.record || {};
+      state.attendance[attendanceKeyFromRecord(record)] = Object.assign(defaultAttendanceRecord(), record);
+      state.attendanceSyncText = `${data.action === 'created' ? '已新增' : '已更新'} Lark`;
+      if (data.duplicateCount > 1) {
+        state.attendanceSyncText += ` · 发现重复 ${data.duplicateCount} 笔`;
+      }
+      saveAttendanceCache();
+    } catch (err) {
+      state.attendanceSyncText = `保存失败：${err.message}`;
+    } finally {
+      state.attendanceSavingKeys.delete(key);
+      renderAttendanceView();
+    }
+  }
+
+  function attendanceTone(value) {
+    if (value === '未点' || value === '未回家') return 'idle';
+    if (value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
+        value === '完成了' || value === 'extra复习了') return 'good';
+    if (value === '回家') return 'home';
+    if (value === '还没有' || value === '迟进补习' || value === '没完成' || value === '没有复习') return 'warn';
+    if (value === '缺席' || value === '不冲凉' || value === '不吃饭') return 'bad';
+    if (value === 'KOKO') return 'koko';
+    return 'idle';
+  }
+
+  function isAttendanceMarked(record) {
+    return ATTENDANCE_STEPS.some((step) => record[step.key] !== step.defaultValue) ||
+      Boolean((record.note || '').trim());
+  }
+
+  function renderAttendanceFilterOptions() {
+    const activeStudents = state.students.filter((rec) => !isStoppedStudent(rec));
+    const values = (field, fallback = '') => unique(activeStudents
+      .map((rec) => studentValue(rec, field) || fallback)
+      .filter(Boolean))
+      .sort((a, b) => a.localeCompare(b, 'zh'));
+    const timeValues = unique(activeStudents.map(attendanceTimeSegment).filter(Boolean))
+      .sort((a, b) => {
+        const order = { '早上': 1, '下午': 2, '未填时间段': 99 };
+        return (order[a] || 50) - (order[b] || 50) || a.localeCompare(b, 'zh');
+      });
+
+    fillSelectWithAll(elAttendanceCampus, values(STUDENT_FIELDS.campus, '未填分院'), state.attendanceFilters.campus, '全部地点');
+    fillSelectWithAll(elAttendanceBlock, values(STUDENT_FIELDS.block, '未填 BLOCK'), state.attendanceFilters.block, '全部 BLOCK');
+    fillSelectWithAll(elAttendanceTime, timeValues, state.attendanceFilters.time, '全部时间段');
+    if (elAttendanceDate) elAttendanceDate.value = state.attendanceDate;
+  }
+
+  function filteredAttendanceStudents() {
+    const q = state.attendanceSearch.trim().toLowerCase();
+    const f = state.attendanceFilters;
+    const seen = new Set();
+    return state.students.filter((rec) => {
+      const id = attendanceStudentId(rec);
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      if (isStoppedStudent(rec)) return false;
+      if (f.campus && (studentValue(rec, STUDENT_FIELDS.campus) || '未填分院') !== f.campus) return false;
+      if (f.block && (studentValue(rec, STUDENT_FIELDS.block) || '未填 BLOCK') !== f.block) return false;
+      if (f.time && attendanceTimeSegment(rec) !== f.time) return false;
+      if (q) {
+        const haystack = [
+          studentValue(rec, STUDENT_FIELDS.no),
+          studentValue(rec, STUDENT_FIELDS.name),
+          studentValue(rec, STUDENT_FIELDS.year),
+          studentValue(rec, STUDENT_FIELDS.teacher),
+          studentValue(rec, STUDENT_FIELDS.block),
+          studentValue(rec, STUDENT_FIELDS.campus),
+          attendanceTimeSegment(rec)
+        ].join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    }).sort((a, b) =>
+      (studentValue(a, STUDENT_FIELDS.block) || '').localeCompare(studentValue(b, STUDENT_FIELDS.block) || '', 'zh') ||
+      (studentValue(a, STUDENT_FIELDS.no) || '').localeCompare(studentValue(b, STUDENT_FIELDS.no) || '', 'zh', { numeric: true }) ||
+      studentValue(a, STUDENT_FIELDS.name).localeCompare(studentValue(b, STUDENT_FIELDS.name), 'zh')
+    );
+  }
+
+  function renderAttendanceSummary(list) {
+    if (!elAttendanceSummary) return;
+    const records = list.map(attendanceRecordFor);
+    const count = (fn) => records.filter(fn).length;
+    const marked = records.filter(isAttendanceMarked).length;
+    const cards = [
+      { label: '应点人数', value: list.length },
+      { label: '已开始点名', value: marked },
+      { label: '到了', value: count((rec) => rec.arrival === '到了'), cls: 'normal' },
+      { label: '还没有/缺席', value: count((rec) => rec.arrival === '还没有' || rec.arrival === '缺席'), cls: 'warning' },
+      { label: 'KOKO', value: count((rec) => rec.arrival === 'KOKO') },
+      { label: '已去补习', value: count((rec) => rec.tuition === '去了' || rec.tuition === '迟进补习'), cls: 'normal' },
+      { label: '已回家', value: count((rec) => rec.home === '回家'), cls: 'normal' },
+      { label: '功课没完成', value: count((rec) => rec.homework === '没完成'), cls: 'warning' }
+    ];
+    elAttendanceSummary.innerHTML = cards.map((c) => `
+      <div class="card ${escapeHtml(c.cls || '')}">
+        <div class="label">${escapeHtml(c.label)}</div>
+        <div class="value">${escapeHtml(String(c.value))}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderAttendanceScope() {
+    if (elAttendanceScopeDate) elAttendanceScopeDate.textContent = state.attendanceDate || todayDateString();
+    if (elAttendanceScopeWeekday) elAttendanceScopeWeekday.textContent = attendanceDateWeekday();
+    if (elAttendanceScopeCampus) elAttendanceScopeCampus.textContent = state.attendanceFilters.campus || '全部';
+    if (elAttendanceScopeBlock) elAttendanceScopeBlock.textContent = state.attendanceFilters.block || '全部';
+    if (elAttendanceScopeTime) elAttendanceScopeTime.textContent = state.attendanceFilters.time || '全部';
+  }
+
+  function renderAttendanceFlow(list) {
+    if (!elAttendanceFlowList) return;
+    const total = list.length;
+    const progress = ATTENDANCE_STEPS.map((step) => {
+      const done = list.filter((rec) => attendanceRecordFor(rec)[step.key] !== step.defaultValue).length;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      return `<div class="attendance-flow-row">
+        <span>${escapeHtml(step.label)}</span>
+        <span class="attendance-flow-track"><span class="attendance-flow-fill" style="width:${pct}%"></span></span>
+        <b>${escapeHtml(String(done))}/${escapeHtml(String(total))}</b>
+      </div>`;
+    }).join('');
+    const alerts = [];
+    for (const rec of list) {
+      const record = attendanceRecordFor(rec);
+      for (const step of ATTENDANCE_STEPS) {
+        const value = record[step.key];
+        if (['还没有', '缺席', 'KOKO', '迟进补习', '不冲凉', '不吃饭', '没完成', '没有复习'].includes(value)) {
+          alerts.push({ rec, step, value });
+        }
+      }
+    }
+    const alertHtml = alerts.length ? `
+      <div class="attendance-alert-list">
+        ${alerts.slice(0, 8).map((item) => `
+          <div class="attendance-alert-item">
+            <strong>${escapeHtml(studentValue(item.rec, STUDENT_FIELDS.name) || '-')} · ${escapeHtml(item.step.label)}</strong>
+            <span>${escapeHtml(item.value)}</span>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<div class="attendance-alert-list"><div class="attendance-alert-item"><strong>暂无需要跟进</strong><span>OK</span></div></div>';
+    elAttendanceFlowList.innerHTML = progress + alertHtml;
+  }
+
+  function renderAttendanceStatusCell(rec, step, record) {
+    const value = record[step.key] || step.defaultValue;
+    return `<td>
+      <button class="attendance-status-pill ${escapeHtml(attendanceTone(value))}" type="button"
+        data-att-menu-student="${escapeHtml(attendanceStudentId(rec))}"
+        data-att-step="${escapeHtml(step.key)}">${escapeHtml(value)}</button>
+    </td>`;
+  }
+
+  function renderAttendanceBoardRow(rec) {
+    const record = attendanceRecordFor(rec);
+    const markedClass = isAttendanceMarked(record) ? 'marked' : '';
+    const no = studentValue(rec, STUDENT_FIELDS.no) || '-';
+    const name = studentValue(rec, STUDENT_FIELDS.name) || '-';
+    return `<tr class="${markedClass}">
+      <td>
+        <div class="attendance-student-cell">
+          <button type="button" data-att-open-student="${escapeHtml(attendanceStudentId(rec))}">${escapeHtml(name)}</button>
+          <span>No.${escapeHtml(no)} · ${escapeHtml(studentValue(rec, STUDENT_FIELDS.year) || '-')} · ${escapeHtml(studentValue(rec, STUDENT_FIELDS.block) || '-')}</span>
+          <span>${escapeHtml(studentValue(rec, STUDENT_FIELDS.campus) || '-')} · ${escapeHtml(attendanceTimeSegment(rec))}</span>
+        </div>
+      </td>
+      ${ATTENDANCE_STEPS.map((step) => renderAttendanceStatusCell(rec, step, record)).join('')}
+      <td>
+        <button class="attendance-note-btn ${record.note ? 'has-note' : ''}" type="button"
+          data-att-open-student="${escapeHtml(attendanceStudentId(rec))}">${record.note ? '有备注' : '备注'}</button>
+      </td>
+    </tr>`;
+  }
+
+  function renderAttendanceBoard(list) {
+    if (!list.length) {
+      return '<div class="attendance-empty">这个地点 / BLOCK / 时间段没有匹配学生。</div>';
+    }
+    return `<div class="attendance-board-wrap">
+      <table class="attendance-board">
+        <thead>
+          <tr>
+            <th>学生</th>
+            ${ATTENDANCE_STEPS.map((step) => `<th>${escapeHtml(step.label)}</th>`).join('')}
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody>${list.map(renderAttendanceBoardRow).join('')}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function renderAttendanceView() {
+    if (!elAttendanceList) return;
+    renderAttendanceFilterOptions();
+    renderAttendanceScope();
+    const list = filteredAttendanceStudents();
+    renderAttendanceSummary(list);
+    renderAttendanceFlow(list);
+
+    if (!state.students.length) {
+      elAttendanceList.innerHTML = '<div class="attendance-empty">加载学生名单中…</div>';
+      if (elAttendanceListMeta) elAttendanceListMeta.textContent = '尚未加载';
+      if (elAttendanceMeta) elAttendanceMeta.textContent = '尚未加载';
+      return;
+    }
+    elAttendanceList.innerHTML = renderAttendanceBoard(list);
+
+    elAttendanceList.querySelectorAll('[data-att-menu-student]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openAttendanceChoiceMenu(
+          btn.getAttribute('data-att-menu-student') || '',
+          btn.getAttribute('data-att-step') || '',
+          btn.getBoundingClientRect()
+        );
+      });
+    });
+    elAttendanceList.querySelectorAll('[data-att-open-student]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openAttendanceStudentModal(btn.getAttribute('data-att-open-student') || '');
+      });
+    });
+
+    const marked = list.map(attendanceRecordFor).filter(isAttendanceMarked).length;
+    const syncText = state.attendanceSavingKeys.size
+      ? `保存中 ${state.attendanceSavingKeys.size}`
+      : state.attendanceSyncText;
+    const metaText = `当前筛选 ${list.length} 人 · Active 总数 ${state.students.filter((rec) => !isStoppedStudent(rec)).length} 人 · 已开始 ${marked} · ${syncText}`;
+    if (elAttendanceMeta) {
+      elAttendanceMeta.textContent = metaText;
+    }
+    if (elAttendanceListMeta) {
+      elAttendanceListMeta.textContent = metaText;
+    }
+  }
+
+  function attendanceStudentById(studentId) {
+    return state.students.find((rec) => attendanceStudentId(rec) === studentId) || null;
+  }
+
+  function openAttendanceChoiceMenu(studentId, stepKey, rect) {
+    const rec = attendanceStudentById(studentId);
+    const step = ATTENDANCE_STEPS.find((item) => item.key === stepKey);
+    if (!rec || !step) return;
+    const record = attendanceRecordFor(rec);
+    const menuWidth = 206;
+    const left = Math.min(Math.max(12, rect.left), window.innerWidth - menuWidth - 12);
+    const top = Math.min(rect.bottom + 8, window.innerHeight - 290);
+    elModalRoot.innerHTML = `<div class="attendance-choice-backdrop" id="attendance-choice-backdrop"></div>
+      <div class="attendance-choice-menu" style="left:${left}px; top:${Math.max(12, top)}px;">
+        <div class="attendance-choice-title">${escapeHtml(studentValue(rec, STUDENT_FIELDS.name) || '-')} · ${escapeHtml(step.label)}</div>
+        ${step.options.map((option) => `
+          <button type="button" class="${record[step.key] === option ? 'active' : ''}"
+            data-att-choice="${escapeHtml(option)}">${escapeHtml(option)}</button>
+        `).join('')}
+      </div>`;
+    const backdrop = document.getElementById('attendance-choice-backdrop');
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+    elModalRoot.querySelectorAll('[data-att-choice]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const value = btn.getAttribute('data-att-choice') || step.defaultValue;
+        closeModal();
+        updateAttendanceForStudent(rec, { [step.key]: value });
+      });
+    });
+  }
+
+  function openAttendanceStudentModal(studentId) {
+    const rec = attendanceStudentById(studentId);
+    if (!rec) return;
+    const record = attendanceRecordFor(rec);
+    const name = studentValue(rec, STUDENT_FIELDS.name) || '-';
+    state.modalOpen = true;
+    elModalRoot.innerHTML = `<div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal wide" role="dialog" aria-modal="true">
+        <h2>${escapeHtml(name)}</h2>
+        <dl>
+          <dt>NO</dt><dd>${escapeHtml(studentValue(rec, STUDENT_FIELDS.no) || '-')}</dd>
+          <dt>年级</dt><dd>${escapeHtml(studentValue(rec, STUDENT_FIELDS.year) || '-')}</dd>
+          <dt>BLOCK</dt><dd>${escapeHtml(studentValue(rec, STUDENT_FIELDS.block) || '-')}</dd>
+          <dt>时间段</dt><dd>${escapeHtml(attendanceTimeSegment(rec))}</dd>
+          <dt>分院</dt><dd>${escapeHtml(studentValue(rec, STUDENT_FIELDS.campus) || '-')}</dd>
+          <dt>负责老师</dt><dd>${escapeHtml(studentValue(rec, STUDENT_FIELDS.teacher) || '-')}</dd>
+          <dt>点名日期</dt><dd>${escapeHtml(state.attendanceDate)} · ${escapeHtml(attendanceDateWeekday())}</dd>
+        </dl>
+        <div class="edit-form" style="margin-top:14px;">
+          ${ATTENDANCE_STEPS.map((step) => `
+            <div class="tag-field">
+              <div class="tag-field-title">${escapeHtml(step.label)}</div>
+              <div class="attendance-options">
+                ${step.options.map((option) => {
+                  const active = record[step.key] === option;
+                  return `<button class="attendance-option ${active ? `active ${attendanceTone(option)}` : ''}" type="button"
+                    data-att-modal-step="${escapeHtml(step.key)}"
+                    data-att-modal-value="${escapeHtml(option)}">${escapeHtml(option)}</button>`;
+                }).join('')}
+              </div>
+            </div>
+          `).join('')}
+          <label>备注
+            <input id="attendance-modal-note" type="text" value="${escapeHtml(record.note || '')}" placeholder="备注" />
+          </label>
+        </div>
+        <div class="actions split">
+          <button id="modal-close" type="button">关闭</button>
+          <button id="attendance-modal-save" class="primary" type="button">套用修改</button>
+        </div>
+      </div>
+    </div>`;
+    bindModalCommon();
+    const patch = {};
+    elModalRoot.querySelectorAll('[data-att-modal-step]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        patch[btn.getAttribute('data-att-modal-step') || ''] = btn.getAttribute('data-att-modal-value') || '';
+        elModalRoot.querySelectorAll(`[data-att-modal-step="${CSS.escape(btn.getAttribute('data-att-modal-step') || '')}"]`).forEach((item) => {
+          item.classList.remove('active', 'idle', 'good', 'warn', 'bad', 'koko', 'home');
+        });
+        btn.classList.add('active', attendanceTone(btn.getAttribute('data-att-modal-value') || ''));
+      });
+    });
+    const saveBtn = document.getElementById('attendance-modal-save');
+    const noteInput = document.getElementById('attendance-modal-note');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => {
+        updateAttendanceForStudent(rec, Object.assign({}, patch, { note: noteInput ? noteInput.value.trim() : '' }));
+        closeModal();
+      });
+    }
+  }
+
   function renderTrendGroupTable(title, label, rows, months) {
     if (!rows.length) return '';
     return `
@@ -1939,6 +2445,7 @@
     state.studentUpdatedAt = data.updatedAt || null;
     state.lastStudentsHash = String(data.count || 0) + '|' + (data.updatedAt || '');
     if (state.view === 'stops') renderStopsView();
+    else if (state.view === 'attendance') renderAttendanceView();
     else renderStudentsView();
   }
 
@@ -1966,6 +2473,8 @@
       applyStudentsPayload(cached.data);
       if (state.view === 'stops' && elStopsMeta) {
         elStopsMeta.textContent = `先显示本机缓存 ${state.students.length} 条 · 正在更新最新停步名单…`;
+      } else if (state.view === 'attendance' && elAttendanceMeta) {
+        elAttendanceMeta.textContent = `先显示本机缓存 ${state.students.length} 条 · 正在更新最新点名名单…`;
       } else {
         elStudentsMeta.textContent = `先显示本机缓存 ${state.students.length} 条 · 正在更新最新名单…`;
       }
@@ -2514,6 +3023,7 @@
     elViewTeachers.hidden = view !== 'teachers';
     elViewStudents.hidden = view !== 'students';
     elViewStops.hidden = view !== 'stops';
+    elViewAttendance.hidden = view !== 'attendance';
     document.querySelectorAll('.tabs button').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-view') === view);
     });
@@ -2521,7 +3031,8 @@
       const views = el.getAttribute('data-view-only').split(/\s+/);
       el.style.display = views.includes(view) ? '' : 'none';
     });
-    if ((view === 'students' || view === 'stops') && !state.lastStudentsHash) loadStudents(true);
+    if ((view === 'students' || view === 'stops' || view === 'attendance') && !state.lastStudentsHash) loadStudents(true);
+    if (view === 'attendance' && !state.attendanceLoaded) loadAttendance(true);
     rerender();
   }
 
@@ -2535,8 +3046,10 @@
       renderTeachersView(filtered);
     } else if (state.view === 'students') {
       renderStudentsView();
-    } else {
+    } else if (state.view === 'stops') {
       renderStopsView();
+    } else {
+      renderAttendanceView();
     }
   }
 
@@ -2590,10 +3103,40 @@
     } catch (err) {
       elStudentsMeta.textContent = `学生名单加载失败：${err.message}`;
       if (elStopsMeta) elStopsMeta.textContent = `停步名单加载失败：${err.message}`;
+      if (elAttendanceMeta) elAttendanceMeta.textContent = `点名名单加载失败：${err.message}`;
       if (!state.students.length) {
         elStudentsTable.querySelector('tbody').innerHTML = `<tr><td class="error-state">无法读取学生名单：${escapeHtml(err.message)}</td></tr>`;
         if (elStopsTable) elStopsTable.querySelector('tbody').innerHTML = `<tr><td class="error-state">无法读取停步名单：${escapeHtml(err.message)}</td></tr>`;
+        if (elAttendanceList) elAttendanceList.innerHTML = `<div class="attendance-empty error-state">无法读取点名名单：${escapeHtml(err.message)}</div>`;
       }
+    }
+  }
+
+  async function loadAttendance(initial, forceRefresh = false) {
+    try {
+      if (initial && !state.attendanceLoaded) {
+        loadAttendanceCache();
+        state.attendanceSyncText = '先显示本机草稿 · 正在同步 Lark…';
+        if (state.view === 'attendance') renderAttendanceView();
+      }
+      const params = new URLSearchParams({
+        date: state.attendanceDate,
+        t: String(Date.now())
+      });
+      if (forceRefresh) params.set('refresh', '1');
+      const resp = await fetch('/api/attendance?' + params.toString(), { cache: 'no-store' });
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { throw new Error('返回非 JSON 数据'); }
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+
+      const hash = String(data.count || 0) + '|' + (data.updatedAt || '');
+      if (hash === state.lastAttendanceHash && !initial && !forceRefresh) return;
+      applyAttendancePayload(data);
+    } catch (err) {
+      state.attendanceSyncText = `同步失败：${err.message}`;
+      if (elAttendanceMeta) elAttendanceMeta.textContent = `点名记录同步失败：${err.message}`;
+      if (state.view === 'attendance') renderAttendanceView();
     }
   }
 
@@ -2601,8 +3144,14 @@
     stopAutoRefresh();
     state.refreshTimer = setInterval(() => {
       if (document.hidden || state.modalOpen) return;
-      if (state.view === 'students' || state.view === 'stops') loadStudents(false);
-      else loadSchedule(false);
+      if (state.view === 'attendance') {
+        loadStudents(false);
+        loadAttendance(false);
+      } else if (state.view === 'students' || state.view === 'stops') {
+        loadStudents(false);
+      } else {
+        loadSchedule(false);
+      }
     }, AUTO_REFRESH_MS);
   }
   function stopAutoRefresh() {
@@ -2627,8 +3176,14 @@
       rerender();
     });
     elRefresh.addEventListener('click', () => {
-      if (state.view === 'students' || state.view === 'stops') loadStudents(false, true);
-      else loadSchedule(false);
+      if (state.view === 'attendance') {
+        loadStudents(false, true);
+        loadAttendance(false, true);
+      } else if (state.view === 'students' || state.view === 'stops') {
+        loadStudents(false, true);
+      } else {
+        loadSchedule(false);
+      }
     });
     elAddSlot.addEventListener('click', () => openScheduleEditor(defaultNewRecord(), 'new'));
     elAddStaff.addEventListener('click', () => openCreateStaffModal(state.filters.role || ''));
@@ -2694,9 +3249,38 @@
         renderStopsView();
       });
     }
+    if (elAttendanceSearch) {
+      elAttendanceSearch.addEventListener('input', () => {
+        state.attendanceSearch = elAttendanceSearch.value || '';
+        renderAttendanceView();
+      });
+    }
+    if (elAttendanceDate) {
+      elAttendanceDate.addEventListener('change', () => {
+        state.attendanceDate = elAttendanceDate.value || todayDateString();
+        state.attendanceLoaded = false;
+        state.lastAttendanceHash = '';
+        state.attendance = {};
+        state.attendanceSyncText = '正在同步 Lark…';
+        renderAttendanceView();
+        loadAttendance(true, true);
+      });
+    }
+    [
+      [elAttendanceCampus, 'campus'],
+      [elAttendanceBlock, 'block'],
+      [elAttendanceTime, 'time']
+    ].forEach(([el, key]) => {
+      if (!el) return;
+      el.addEventListener('change', () => {
+        state.attendanceFilters[key] = el.value || '';
+        renderAttendanceView();
+      });
+    });
   }
 
   function init() {
+    loadAttendanceCache();
     syncFilterControls();
     bindFilters();
     switchView('gantt');
@@ -2704,8 +3288,14 @@
     startAutoRefresh();
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        if (state.view === 'students' || state.view === 'stops') loadStudents(false);
-        else loadSchedule(false);
+        if (state.view === 'attendance') {
+          loadStudents(false);
+          loadAttendance(false);
+        } else if (state.view === 'students' || state.view === 'stops') {
+          loadStudents(false);
+        } else {
+          loadSchedule(false);
+        }
       }
     });
   }

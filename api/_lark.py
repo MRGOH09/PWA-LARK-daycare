@@ -57,6 +57,9 @@ def get_env():
         env["LARK_STAFF_TABLE_ID"] = staff_table_id.strip()
     student_table_id = os.environ.get("LARK_STUDENT_TABLE_ID")
     env["LARK_STUDENT_TABLE_ID"] = student_table_id.strip() if student_table_id else DEFAULT_STUDENT_TABLE_ID
+    attendance_table_id = os.environ.get("LARK_ATTENDANCE_TABLE_ID")
+    if attendance_table_id:
+        env["LARK_ATTENDANCE_TABLE_ID"] = attendance_table_id.strip()
     return env
 
 
@@ -142,6 +145,13 @@ def fetch_student_records(token, env):
     return fetch_all_records(token, env, table_id=table_id)
 
 
+def fetch_attendance_records(token, env):
+    table_id = env.get("LARK_ATTENDANCE_TABLE_ID")
+    if not table_id:
+        raise RuntimeError("Missing LARK_ATTENDANCE_TABLE_ID")
+    return fetch_all_records(token, env, table_id=table_id)
+
+
 def lark_create_record(token, env, fields, table_id=None):
     resp = requests.post(
         records_url(env, table_id=table_id),
@@ -156,9 +166,9 @@ def lark_create_record(token, env, fields, table_id=None):
     return data.get("data", {}).get("record", {})
 
 
-def lark_update_record(token, env, record_id, fields):
+def lark_update_record(token, env, record_id, fields, table_id=None):
     resp = requests.put(
-        records_url(env, record_id),
+        records_url(env, record_id, table_id=table_id),
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         json={"fields": fields},
         timeout=15,
