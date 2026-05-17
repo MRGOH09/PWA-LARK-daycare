@@ -60,6 +60,17 @@ def get_env():
     attendance_table_id = os.environ.get("LARK_ATTENDANCE_TABLE_ID")
     if attendance_table_id:
         env["LARK_ATTENDANCE_TABLE_ID"] = attendance_table_id.strip()
+    for optional_key in (
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_ATTENDANCE_TABLE",
+        "SUPABASE_ATTENDANCE_EVENTS_TABLE",
+        "ATTENDANCE_PRIMARY_STORE",
+        "ATTENDANCE_SYNC_LARK",
+    ):
+        optional_value = os.environ.get(optional_key)
+        if optional_value:
+            env[optional_key] = optional_value.strip()
     return env
 
 
