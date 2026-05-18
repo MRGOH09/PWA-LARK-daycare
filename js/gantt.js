@@ -90,7 +90,7 @@
     attendance: {},
     attendanceDate: todayDateString(),
     attendanceSearch: '',
-    attendanceFilters: { campus: '', block: '', time: '' },
+    attendanceFilters: { campus: '', block: '', year: '', time: '' },
     attendanceLoaded: false,
     attendanceSavingKeys: new Set(),
     attendanceSyncText: '尚未同步点名记录',
@@ -156,6 +156,7 @@
   const elAttendanceDate = $('#attendance-date');
   const elAttendanceCampus = $('#attendance-filter-campus');
   const elAttendanceBlock = $('#attendance-filter-block');
+  const elAttendanceYear = $('#attendance-filter-year');
   const elAttendanceTime = $('#attendance-filter-time');
   const elAttendanceSearch = $('#attendance-search');
   const elAttendanceMeta = $('#attendance-meta');
@@ -163,6 +164,7 @@
   const elAttendanceScopeWeekday = $('#attendance-scope-weekday');
   const elAttendanceScopeCampus = $('#attendance-scope-campus');
   const elAttendanceScopeBlock = $('#attendance-scope-block');
+  const elAttendanceScopeYear = $('#attendance-scope-year');
   const elAttendanceScopeTime = $('#attendance-scope-time');
   const elAttendanceFlowList = $('#attendance-flow-list');
   const elAttendanceListMeta = $('#attendance-list-meta');
@@ -1910,6 +1912,22 @@
     return raw || '未填时间段';
   }
 
+  function attendanceYearLabel(rec) {
+    return normalizedStudentYear(rec) || '未填年级';
+  }
+
+  function attendanceYearRank(year) {
+    const idx = FIXED_YEAR_ORDER.indexOf(String(year || '').toUpperCase());
+    if (idx >= 0) return idx;
+    return year === '未填年级' ? 998 : 500;
+  }
+
+  function compareAttendanceYears(a, b) {
+    const rankA = attendanceYearRank(a);
+    const rankB = attendanceYearRank(b);
+    return rankA - rankB || String(a || '').localeCompare(String(b || ''), 'zh', { numeric: true });
+  }
+
   function attendanceStudentId(rec) {
     return rec.recordId || studentValue(rec, STUDENT_FIELDS.no) || studentValue(rec, STUDENT_FIELDS.name);
   }
@@ -1934,12 +1952,27 @@
     return Object.assign(defaultAttendanceRecord(), state.attendance[key] || {});
   }
 
+  function attendanceScrollPosition() {
+    const wrap = elAttendanceList ? elAttendanceList.querySelector('.attendance-board-wrap') : null;
+    return wrap ? { top: wrap.scrollTop, left: wrap.scrollLeft } : null;
+  }
+
+  function restoreAttendanceScroll(position) {
+    if (!position) return;
+    window.requestAnimationFrame(() => {
+      const wrap = elAttendanceList ? elAttendanceList.querySelector('.attendance-board-wrap') : null;
+      if (!wrap) return;
+      wrap.scrollTop = position.top;
+      wrap.scrollLeft = position.left;
+    });
+  }
+
   function updateAttendanceByKey(key, patch, options = {}) {
     state.attendance[key] = Object.assign(defaultAttendanceRecord(), state.attendance[key] || {}, patch, {
       updatedAt: new Date().toISOString()
     });
     saveAttendanceCache();
-    renderAttendanceView();
+    renderAttendanceView({ preserveScroll: true });
     if (options.persist) {
       persistAttendanceRecord(options.student, key);
     }
@@ -1961,7 +1994,7 @@
     state.lastAttendanceHash = String(data.count || 0) + '|' + (data.updatedAt || '');
     state.attendanceSyncText = `已同步 Lark · ${data.updatedAt || '-'}`;
     saveAttendanceCache();
-    if (state.view === 'attendance') renderAttendanceView();
+    if (state.view === 'attendance') renderAttendanceView({ preserveScroll: true });
   }
 
   function attendanceStudentPayload(rec) {
@@ -1981,7 +2014,7 @@
     if (!rec || !key) return;
     state.attendanceSavingKeys.add(key);
     state.attendanceSyncText = '保存中…';
-    renderAttendanceView();
+    renderAttendanceView({ preserveScroll: true });
     try {
       const resp = await fetch('/api/attendance', {
         method: 'POST',
@@ -2008,7 +2041,7 @@
       state.attendanceSyncText = `保存失败：${err.message}`;
     } finally {
       state.attendanceSavingKeys.delete(key);
-      renderAttendanceView();
+      renderAttendanceView({ preserveScroll: true });
     }
   }
 
@@ -2039,9 +2072,12 @@
         const order = { '早上': 1, '下午': 2, '未填时间段': 99 };
         return (order[a] || 50) - (order[b] || 50) || a.localeCompare(b, 'zh');
       });
+    const yearValues = unique(activeStudents.map(attendanceYearLabel).filter(Boolean))
+      .sort(compareAttendanceYears);
 
     fillSelectWithAll(elAttendanceCampus, values(STUDENT_FIELDS.campus, '未填分院'), state.attendanceFilters.campus, '全部地点');
     fillSelectWithAll(elAttendanceBlock, values(STUDENT_FIELDS.block, '未填 BLOCK'), state.attendanceFilters.block, '全部 BLOCK');
+    fillSelectWithAll(elAttendanceYear, yearValues, state.attendanceFilters.year, '全部年级');
     fillSelectWithAll(elAttendanceTime, timeValues, state.attendanceFilters.time, '全部时间段');
     if (elAttendanceDate) elAttendanceDate.value = state.attendanceDate;
   }
@@ -2057,6 +2093,7 @@
       if (isStoppedStudent(rec)) return false;
       if (f.campus && (studentValue(rec, STUDENT_FIELDS.campus) || '未填分院') !== f.campus) return false;
       if (f.block && (studentValue(rec, STUDENT_FIELDS.block) || '未填 BLOCK') !== f.block) return false;
+      if (f.year && attendanceYearLabel(rec) !== f.year) return false;
       if (f.time && attendanceTimeSegment(rec) !== f.time) return false;
       if (q) {
         const haystack = [
@@ -2072,6 +2109,7 @@
       }
       return true;
     }).sort((a, b) =>
+      compareAttendanceYears(attendanceYearLabel(a), attendanceYearLabel(b)) ||
       (studentValue(a, STUDENT_FIELDS.block) || '').localeCompare(studentValue(b, STUDENT_FIELDS.block) || '', 'zh') ||
       (studentValue(a, STUDENT_FIELDS.no) || '').localeCompare(studentValue(b, STUDENT_FIELDS.no) || '', 'zh', { numeric: true }) ||
       studentValue(a, STUDENT_FIELDS.name).localeCompare(studentValue(b, STUDENT_FIELDS.name), 'zh')
@@ -2106,6 +2144,7 @@
     if (elAttendanceScopeWeekday) elAttendanceScopeWeekday.textContent = attendanceDateWeekday();
     if (elAttendanceScopeCampus) elAttendanceScopeCampus.textContent = state.attendanceFilters.campus || '全部';
     if (elAttendanceScopeBlock) elAttendanceScopeBlock.textContent = state.attendanceFilters.block || '全部';
+    if (elAttendanceScopeYear) elAttendanceScopeYear.textContent = state.attendanceFilters.year || '全部';
     if (elAttendanceScopeTime) elAttendanceScopeTime.textContent = state.attendanceFilters.time || '全部';
   }
 
@@ -2144,12 +2183,20 @@
     elAttendanceFlowList.innerHTML = progress + alertHtml;
   }
 
+  function isAttendanceFollowupDisabled(step, record) {
+    return record.arrival === '缺席' && step.key !== 'arrival';
+  }
+
   function renderAttendanceStatusCell(rec, step, record) {
     const value = record[step.key] || step.defaultValue;
+    const disabled = isAttendanceFollowupDisabled(step, record);
+    const label = disabled && value === step.defaultValue ? '不用点' : value;
+    const attrs = disabled
+      ? 'disabled aria-disabled="true" title="学生缺席后不需要继续点后续流程"'
+      : `data-att-menu-student="${escapeHtml(attendanceStudentId(rec))}" data-att-step="${escapeHtml(step.key)}"`;
     return `<td>
-      <button class="attendance-status-pill ${escapeHtml(attendanceTone(value))}" type="button"
-        data-att-menu-student="${escapeHtml(attendanceStudentId(rec))}"
-        data-att-step="${escapeHtml(step.key)}">${escapeHtml(value)}</button>
+      <button class="attendance-status-pill ${escapeHtml(attendanceTone(value))} ${disabled ? 'disabled' : ''}" type="button"
+        ${attrs}>${escapeHtml(label)}</button>
     </td>`;
   }
 
@@ -2161,7 +2208,7 @@
     return `<tr class="${markedClass}">
       <td>
         <div class="attendance-student-cell">
-          <button type="button" data-att-open-student="${escapeHtml(attendanceStudentId(rec))}">${escapeHtml(name)}</button>
+          <strong class="attendance-student-name">${escapeHtml(name)}</strong>
           <span>No.${escapeHtml(no)} · ${escapeHtml(studentValue(rec, STUDENT_FIELDS.year) || '-')} · ${escapeHtml(studentValue(rec, STUDENT_FIELDS.block) || '-')}</span>
           <span>${escapeHtml(studentValue(rec, STUDENT_FIELDS.campus) || '-')} · ${escapeHtml(attendanceTimeSegment(rec))}</span>
         </div>
@@ -2174,9 +2221,28 @@
     </tr>`;
   }
 
+  function renderAttendanceYearGroup(year, rows) {
+    const marked = rows.map(attendanceRecordFor).filter(isAttendanceMarked).length;
+    const colspan = ATTENDANCE_STEPS.length + 1;
+    return `<tr class="attendance-year-row">
+      <th scope="rowgroup">${escapeHtml(year)}</th>
+      <td colspan="${colspan}"><strong>${escapeHtml(String(rows.length))}人</strong> · 已开始 ${escapeHtml(String(marked))}/${escapeHtml(String(rows.length))}</td>
+    </tr>${rows.map(renderAttendanceBoardRow).join('')}`;
+  }
+
   function renderAttendanceBoard(list) {
     if (!list.length) {
       return '<div class="attendance-empty">这个地点 / BLOCK / 时间段没有匹配学生。</div>';
+    }
+    const groups = [];
+    for (const rec of list) {
+      const year = attendanceYearLabel(rec);
+      const last = groups[groups.length - 1];
+      if (!last || last.year !== year) {
+        groups.push({ year, rows: [rec] });
+      } else {
+        last.rows.push(rec);
+      }
     }
     return `<div class="attendance-board-wrap">
       <table class="attendance-board">
@@ -2187,13 +2253,14 @@
             <th>备注</th>
           </tr>
         </thead>
-        <tbody>${list.map(renderAttendanceBoardRow).join('')}</tbody>
+        <tbody>${groups.map((group) => renderAttendanceYearGroup(group.year, group.rows)).join('')}</tbody>
       </table>
     </div>`;
   }
 
-  function renderAttendanceView() {
+  function renderAttendanceView(options = {}) {
     if (!elAttendanceList) return;
+    const scrollPosition = options.scrollPosition || (options.preserveScroll ? attendanceScrollPosition() : null);
     renderAttendanceFilterOptions();
     renderAttendanceScope();
     const list = filteredAttendanceStudents();
@@ -2234,6 +2301,7 @@
     if (elAttendanceListMeta) {
       elAttendanceListMeta.textContent = metaText;
     }
+    restoreAttendanceScroll(scrollPosition);
   }
 
   function attendanceStudentById(studentId) {
@@ -2245,6 +2313,7 @@
     const step = ATTENDANCE_STEPS.find((item) => item.key === stepKey);
     if (!rec || !step) return;
     const record = attendanceRecordFor(rec);
+    if (isAttendanceFollowupDisabled(step, record)) return;
     const menuWidth = 206;
     const left = Math.min(Math.max(12, rect.left), window.innerWidth - menuWidth - 12);
     const top = Math.min(rect.bottom + 8, window.innerHeight - 290);
@@ -2292,9 +2361,11 @@
               <div class="attendance-options">
                 ${step.options.map((option) => {
                   const active = record[step.key] === option;
-                  return `<button class="attendance-option ${active ? `active ${attendanceTone(option)}` : ''}" type="button"
+                  const disabled = isAttendanceFollowupDisabled(step, record);
+                  return `<button class="attendance-option ${active ? `active ${attendanceTone(option)}` : ''} ${disabled ? 'disabled' : ''}" type="button"
                     data-att-modal-step="${escapeHtml(step.key)}"
-                    data-att-modal-value="${escapeHtml(option)}">${escapeHtml(option)}</button>`;
+                    data-att-modal-value="${escapeHtml(option)}"
+                    ${disabled ? 'disabled aria-disabled="true"' : ''}>${escapeHtml(option)}</button>`;
                 }).join('')}
               </div>
             </div>
@@ -2311,15 +2382,41 @@
     </div>`;
     bindModalCommon();
     const patch = {};
+    const syncModalDisabled = () => {
+      const effectiveArrival = patch.arrival || record.arrival;
+      elModalRoot.querySelectorAll('[data-att-modal-step]').forEach((btn) => {
+        const stepKey = btn.getAttribute('data-att-modal-step') || '';
+        const disabled = effectiveArrival === '缺席' && stepKey !== 'arrival';
+        btn.disabled = disabled;
+        btn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        btn.classList.toggle('disabled', disabled);
+      });
+    };
+    const resetModalStepSelection = (stepKey, value) => {
+      elModalRoot.querySelectorAll(`[data-att-modal-step="${CSS.escape(stepKey)}"]`).forEach((item) => {
+        item.classList.remove('active', 'idle', 'good', 'warn', 'bad', 'koko', 'home');
+        if ((item.getAttribute('data-att-modal-value') || '') === value) {
+          item.classList.add('active', attendanceTone(value));
+        }
+      });
+    };
     elModalRoot.querySelectorAll('[data-att-modal-step]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        patch[btn.getAttribute('data-att-modal-step') || ''] = btn.getAttribute('data-att-modal-value') || '';
-        elModalRoot.querySelectorAll(`[data-att-modal-step="${CSS.escape(btn.getAttribute('data-att-modal-step') || '')}"]`).forEach((item) => {
-          item.classList.remove('active', 'idle', 'good', 'warn', 'bad', 'koko', 'home');
-        });
-        btn.classList.add('active', attendanceTone(btn.getAttribute('data-att-modal-value') || ''));
+        if (btn.disabled) return;
+        const stepKey = btn.getAttribute('data-att-modal-step') || '';
+        const value = btn.getAttribute('data-att-modal-value') || '';
+        patch[stepKey] = value;
+        if (stepKey === 'arrival' && value === '缺席') {
+          ATTENDANCE_STEPS.filter((step) => step.key !== 'arrival').forEach((step) => {
+            delete patch[step.key];
+            resetModalStepSelection(step.key, record[step.key] || step.defaultValue);
+          });
+        }
+        resetModalStepSelection(stepKey, value);
+        syncModalDisabled();
       });
     });
+    syncModalDisabled();
     const saveBtn = document.getElementById('attendance-modal-save');
     const noteInput = document.getElementById('attendance-modal-note');
     if (saveBtn) {
@@ -2445,7 +2542,7 @@
     state.studentUpdatedAt = data.updatedAt || null;
     state.lastStudentsHash = String(data.count || 0) + '|' + (data.updatedAt || '');
     if (state.view === 'stops') renderStopsView();
-    else if (state.view === 'attendance') renderAttendanceView();
+    else if (state.view === 'attendance') renderAttendanceView({ preserveScroll: true });
     else renderStudentsView();
   }
 
@@ -3269,6 +3366,7 @@
     [
       [elAttendanceCampus, 'campus'],
       [elAttendanceBlock, 'block'],
+      [elAttendanceYear, 'year'],
       [elAttendanceTime, 'time']
     ].forEach(([el, key]) => {
       if (!el) return;

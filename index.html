@@ -1265,6 +1265,12 @@
   .attendance-option.active.bad { background: var(--bad); }
   .attendance-option.active.koko { background: var(--koko); }
   .attendance-option.active.home { background: var(--home); }
+  .attendance-option.disabled,
+  .attendance-option:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-color: rgba(100, 116, 139, 0.18);
+  }
   .attendance-note-row {
     display: grid;
     grid-template-columns: 86px minmax(0, 1fr);
@@ -1430,21 +1436,37 @@
     gap: 2px;
     min-width: 176px;
   }
-  .attendance-student-cell button {
-    border: 0;
-    background: transparent;
+  .attendance-student-name {
+    display: block;
     color: var(--text);
-    padding: 0;
-    text-align: left;
     font-weight: 900;
-    cursor: pointer;
-  }
-  .attendance-student-cell button:hover {
-    color: var(--accent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .attendance-student-cell span {
     color: var(--muted);
     font-size: 11px;
+  }
+  .attendance-year-row th,
+  .attendance-year-row td {
+    background: #111827;
+    color: var(--text);
+    border-bottom-color: rgba(56, 189, 248, 0.28);
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .attendance-year-row th {
+    color: var(--accent);
+  }
+  .attendance-board .attendance-year-row th:first-child {
+    background: #111827;
+  }
+  .attendance-year-row td {
+    color: var(--muted);
+  }
+  .attendance-year-row strong {
+    color: var(--text);
   }
   .attendance-status-pill,
   .attendance-note-btn {
@@ -1491,10 +1513,23 @@
     background: rgba(100, 116, 139, 0.16);
     color: #cbd5e1;
   }
+  .attendance-status-pill.disabled,
+  .attendance-status-pill:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+    color: var(--muted);
+    background: rgba(15, 23, 42, 0.28);
+    border-color: rgba(100, 116, 139, 0.18);
+  }
   .attendance-status-pill:hover,
   .attendance-note-btn:hover {
     border-color: var(--accent);
     color: var(--accent);
+  }
+  .attendance-status-pill.disabled:hover,
+  .attendance-status-pill:disabled:hover {
+    border-color: rgba(100, 116, 139, 0.18);
+    color: var(--muted);
   }
   .attendance-note-btn.has-note {
     border-color: rgba(56, 189, 248, 0.42);
@@ -2116,6 +2151,7 @@
         <input id="attendance-date" type="date" aria-label="点名日期" />
         <select id="attendance-filter-campus" aria-label="点名地点"></select>
         <select id="attendance-filter-block" aria-label="点名 BLOCK"></select>
+        <select id="attendance-filter-year" aria-label="筛选年级"></select>
         <select id="attendance-filter-time" aria-label="点名时间段"></select>
         <input id="attendance-search" type="search" placeholder="搜索学生" autocomplete="off" />
       </div>
@@ -2130,6 +2166,7 @@
           <dt>礼拜</dt><dd id="attendance-scope-weekday">-</dd>
           <dt>在哪里</dt><dd id="attendance-scope-campus">全部</dd>
           <dt>BLOCK</dt><dd id="attendance-scope-block">全部</dd>
+          <dt>年级</dt><dd id="attendance-scope-year">全部</dd>
           <dt>时间段</dt><dd id="attendance-scope-time">全部</dd>
         </dl>
         <h3 style="margin-top:16px;">流程进度</h3>
@@ -2150,7 +2187,7 @@
 
 <div id="modal-root"></div>
 
-<script src="js/gantt.js?v=attendance-date-v32" defer></script>
+<script src="js/gantt.js?v=attendance-year-v33" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
