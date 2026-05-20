@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "DAYCARE 点名",
-  "short_name": "点名",
-  "description": "DAYCARE 学生点名与每日流程记录",
+  "name": "托育点名",
+  "short_name": "托育点名",
+  "description": "托育学生点名与每日流程记录",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
