@@ -1,10 +1,10 @@
-const CACHE = 'attendance-shell-v16';
+const CACHE = 'attendance-shell-v17';
 const ASSETS = [
   '/',
   '/attendance.html',
   '/attendance-dashboard.html',
   '/attendance.webmanifest',
-  '/js/attendance.js?v=standalone-v16',
+  '/js/attendance.js?v=standalone-v17',
   '/js/attendance-dashboard.js?v=2'
 ];
 

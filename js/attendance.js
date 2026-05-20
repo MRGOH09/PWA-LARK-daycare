@@ -102,6 +102,7 @@
   const elRefresh = $('#refresh');
   const elViewAttendance = $('#view-attendance');
   const elViewStats = $('#view-stats');
+  const elViewSettings = $('#view-settings');
   const elTeacherStatsPanel = $('#teacher-stats-panel');
   const elTeacherStatsRangeDay = $('#teacher-stats-range-day');
   const elTeacherStatsRangeMonth = $('#teacher-stats-range-month');
@@ -116,6 +117,13 @@
   const elGoogleButton = $('#google-signin-button');
   const elSignOut = $('#sign-out');
   const elCurrentUser = $('#current-user');
+  const elMobileSettingsPanel = $('#mobile-settings-panel');
+  const elMobileCurrentUser = $('#mobile-current-user');
+  const elMobileSignOut = $('#mobile-sign-out');
+  const elMobileRefresh = $('#mobile-refresh');
+  const elMobileSyncStatus = $('#mobile-sync-status');
+  const elMobileFilterToggle = $('#mobile-filter-toggle');
+  const elMobileFilterClose = $('#mobile-filter-close');
 
   function getApiOrigin() {
     const host = window.location.hostname;
@@ -295,10 +303,15 @@
     const locked = state.auth.enabled && !state.auth.user;
     document.documentElement.dataset.auth = locked ? 'locked' : 'ready';
     if (elAuthGate) elAuthGate.hidden = !locked;
+    const userText = state.auth.user ? (state.auth.user.name || state.auth.user.email || '已登录') : '';
     if (elCurrentUser) {
-      elCurrentUser.textContent = state.auth.user ? (state.auth.user.name || state.auth.user.email || '已登录') : '';
+      elCurrentUser.textContent = userText;
+    }
+    if (elMobileCurrentUser) {
+      elMobileCurrentUser.textContent = userText || (state.auth.enabled ? '尚未登录' : '未启用登录限制');
     }
     if (elSignOut) elSignOut.hidden = !(state.auth.enabled && state.auth.user);
+    if (elMobileSignOut) elMobileSignOut.hidden = !(state.auth.enabled && state.auth.user);
     if (elAuthStatus) {
       if (!state.auth.enabled) elAuthStatus.textContent = '未启用 Google 登录限制';
       else if (state.auth.user) elAuthStatus.textContent = `已登录：${state.auth.user.email || '-'}`;
@@ -775,6 +788,7 @@
     const metaText = `当前筛选 ${list.length} 人${modeText} · Active 总数 ${state.students.filter((rec) => !isStoppedStudent(rec)).length} 人 · 已开始 ${marked} · ${attendanceSyncLabel()}`;
     if (elAttendanceMeta) elAttendanceMeta.textContent = metaText;
     if (elAttendanceListMeta) elAttendanceListMeta.textContent = metaText;
+    if (elMobileSyncStatus) elMobileSyncStatus.textContent = attendanceSyncLabel();
   }
 
   function renderUnfinishedTools() {
@@ -833,19 +847,30 @@
     return state.currentView === 'stats';
   }
 
+  function isSettingsView() {
+    return state.currentView === 'settings';
+  }
+
   function setViewUi() {
     const statsView = isStatsView();
-    document.documentElement.dataset.view = statsView ? 'stats' : 'attendance';
-    if (elAttendanceSummary) elAttendanceSummary.hidden = statsView;
-    if (elAttendanceMain) elAttendanceMain.hidden = statsView;
+    const settingsView = isSettingsView();
+    document.documentElement.dataset.view = settingsView ? 'settings' : (statsView ? 'stats' : 'attendance');
+    if (!settingsView) document.documentElement.dataset.filterOpen = 'false';
+    if (elAttendanceSummary) elAttendanceSummary.hidden = statsView || settingsView;
+    if (elAttendanceMain) elAttendanceMain.hidden = statsView || settingsView;
     if (elTeacherStatsPanel) elTeacherStatsPanel.hidden = !statsView;
+    if (elMobileSettingsPanel) elMobileSettingsPanel.hidden = !settingsView;
     if (elViewAttendance) {
-      elViewAttendance.classList.toggle('active', !statsView);
-      elViewAttendance.setAttribute('aria-selected', statsView ? 'false' : 'true');
+      elViewAttendance.classList.toggle('active', !statsView && !settingsView);
+      elViewAttendance.setAttribute('aria-selected', (!statsView && !settingsView) ? 'true' : 'false');
     }
     if (elViewStats) {
       elViewStats.classList.toggle('active', statsView);
       elViewStats.setAttribute('aria-selected', statsView ? 'true' : 'false');
+    }
+    if (elViewSettings) {
+      elViewSettings.classList.toggle('active', settingsView);
+      elViewSettings.setAttribute('aria-selected', settingsView ? 'true' : 'false');
     }
     if (elTeacherStatsMonth && elTeacherStatsMonth.value !== state.teacherStatsMonth) {
       elTeacherStatsMonth.value = state.teacherStatsMonth;
@@ -959,10 +984,12 @@
   }
 
   function switchView(view) {
-    state.currentView = view === 'stats' ? 'stats' : 'attendance';
+    state.currentView = view === 'settings' ? 'settings' : (view === 'stats' ? 'stats' : 'attendance');
     setViewUi();
     if (isStatsView()) {
       loadTeacherStats(false);
+    } else if (isSettingsView()) {
+      renderAttendanceStatusPanels(filteredAttendanceStudents());
     } else {
       renderAttendanceView({ preserveScroll: true });
     }
@@ -1605,21 +1632,34 @@
   }
 
   function bindControls() {
-    if (elRefresh) {
-      elRefresh.addEventListener('click', () => {
-        if (isStatsView()) {
-          loadTeacherStats(true);
-        } else {
-          loadStudents(false, true);
-          loadAttendance(false, true);
-        }
-      });
+    function refreshCurrentView() {
+      if (isStatsView()) {
+        loadTeacherStats(true);
+      } else {
+        loadStudents(false, true);
+        loadAttendance(false, true);
+      }
     }
+    if (elRefresh) elRefresh.addEventListener('click', refreshCurrentView);
+    if (elMobileRefresh) elMobileRefresh.addEventListener('click', refreshCurrentView);
     if (elViewAttendance) {
       elViewAttendance.addEventListener('click', () => switchView('attendance'));
     }
     if (elViewStats) {
       elViewStats.addEventListener('click', () => switchView('stats'));
+    }
+    if (elViewSettings) {
+      elViewSettings.addEventListener('click', () => switchView('settings'));
+    }
+    if (elMobileFilterToggle) {
+      elMobileFilterToggle.addEventListener('click', () => {
+        document.documentElement.dataset.filterOpen = 'true';
+      });
+    }
+    if (elMobileFilterClose) {
+      elMobileFilterClose.addEventListener('click', () => {
+        document.documentElement.dataset.filterOpen = 'false';
+      });
     }
     function resetTeacherStatsCache() {
       state.teacherStats = null;
@@ -1674,23 +1714,24 @@
         renderAttendanceView({ preserveScroll: !state.showUnfinishedOnly });
       });
     }
-    if (elSignOut) {
-      elSignOut.addEventListener('click', () => {
-        saveAuthToken('');
-        state.auth.user = null;
-        state.appStarted = false;
-        state.currentView = 'attendance';
-        state.teacherStats = null;
-        state.teacherStatsLoadedKey = '';
-        state.teacherStatsError = '';
-        stopAutoRefresh();
-        if (window.google && window.google.accounts && window.google.accounts.id) {
-          window.google.accounts.id.disableAutoSelect();
-        }
-        setAuthUi();
-        renderGoogleButton();
-      });
+    function signOut() {
+      saveAuthToken('');
+      state.auth.user = null;
+      state.appStarted = false;
+      state.currentView = 'attendance';
+      state.teacherStats = null;
+      state.teacherStatsLoadedKey = '';
+      state.teacherStatsError = '';
+      stopAutoRefresh();
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        window.google.accounts.id.disableAutoSelect();
+      }
+      setAuthUi();
+      setViewUi();
+      renderGoogleButton();
     }
+    if (elSignOut) elSignOut.addEventListener('click', signOut);
+    if (elMobileSignOut) elMobileSignOut.addEventListener('click', signOut);
     if (elAttendanceSearch) {
       elAttendanceSearch.addEventListener('input', () => {
         state.attendanceSearch = elAttendanceSearch.value || '';
