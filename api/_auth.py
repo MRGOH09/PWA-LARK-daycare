@@ -13,6 +13,7 @@ from _lark import extract_list, extract_text, fetch_all_records, get_tenant_acce
 GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 SESSION_TTL_SECONDS = 12 * 60 * 60
 EMAIL_FIELDS = ("邮箱", "Email", "email", "Google Email", "Google邮箱", "登录邮箱", "登入邮箱", "账号")
+NAME_FIELDS = ("名字", "姓名", "老师名字", "老师姓名", "Name", "name", "Display Name", "显示名字", "昵称")
 ACTIVE_FIELDS = ("启用", "允许登录", "可登录", "Active", "active", "状态")
 INACTIVE_VALUES = {"0", "false", "no", "否", "停用", "禁用", "不允许", "inactive", "disabled", "停用中"}
 
@@ -165,23 +166,36 @@ def record_is_active(fields):
     return True if matched else True
 
 
-def fetch_whitelist_emails(env):
+def fetch_whitelist_profiles(env):
     token = get_tenant_access_token(env["LARK_APP_ID"], env["LARK_APP_SECRET"])
-    emails = set()
+    profiles = {}
     for item in fetch_all_records(token, env, table_id=whitelist_table_id()):
         fields = item.get("fields", {}) or {}
         if not record_is_active(fields):
             continue
+        display_name = ""
+        for value in field_values(fields, NAME_FIELDS):
+            display_name = value
+            break
         for value in field_values(fields, EMAIL_FIELDS):
-            emails.add(value.lower())
-    return emails
+            email = value.lower()
+            profiles[email] = {
+                "email": email,
+                "name": display_name,
+                "recordId": clean(item.get("record_id") or item.get("recordId")),
+            }
+    return profiles
+
+
+def fetch_whitelist_emails(env):
+    return set(fetch_whitelist_profiles(env))
 
 
 def assert_email_allowed(env, email):
     email = clean(email).lower()
     if not email:
         raise RuntimeError("登录资料缺少邮箱")
-    allowed = fetch_whitelist_emails(env)
-    if email not in allowed:
+    profiles = fetch_whitelist_profiles(env)
+    if email not in profiles:
         raise RuntimeError(f"{email} 不在点名登录白名单内")
-    return True
+    return profiles[email]

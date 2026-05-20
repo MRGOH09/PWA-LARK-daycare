@@ -40,7 +40,10 @@ class handler(BaseHTTPRequestHandler):
             if not credential:
                 raise RuntimeError("Missing Google credential")
             user = verify_google_credential(credential)
-            assert_email_allowed(env, user["email"])
+            profile = assert_email_allowed(env, user["email"])
+            if profile.get("name"):
+                user["name"] = profile["name"]
+            user["whitelistName"] = profile.get("name") or ""
             token = sign_session(user, env)
             send_json(self, 200, {
                 "success": True,

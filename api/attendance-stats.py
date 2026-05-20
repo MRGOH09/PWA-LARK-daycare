@@ -7,7 +7,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _auth import AuthError, require_attendance_auth  # noqa: E402
+from _auth import AuthError, fetch_whitelist_profiles, require_attendance_auth  # noqa: E402
 from _lark import get_env, send_json  # noqa: E402
 from _supabase import fetch_attendance_events, supabase_enabled  # noqa: E402
 
@@ -100,10 +100,14 @@ def stats_range(params):
     }
 
 
-def actor_key(event):
+def actor_key(event, whitelist_profiles=None):
+    whitelist_profiles = whitelist_profiles or {}
     email = clean_text(event.get("actor_email")).lower()
     name = clean_text(event.get("actor_name"))
     if email:
+        formal_name = clean_text((whitelist_profiles.get(email) or {}).get("name"))
+        if formal_name:
+            return email, formal_name
         return email, name or email
     if name:
         return name, name
@@ -126,7 +130,7 @@ def empty_person(key, name):
     }
 
 
-def build_stats(events):
+def build_stats(events, whitelist_profiles=None):
     people = {}
     totals = {
         "totalActions": 0,
@@ -142,7 +146,7 @@ def build_stats(events):
         step = clean_text(event.get("step_key"))
         new_value = clean_text(event.get("new_value"))
         student_id = clean_text(event.get("student_record_id"))
-        key, name = actor_key(event)
+        key, name = actor_key(event, whitelist_profiles)
         person = people.setdefault(key, empty_person(key, name))
         if name and person["name"] == key:
             person["name"] = name
@@ -188,7 +192,8 @@ class handler(BaseHTTPRequestHandler):
             params = query_params(self.path)
             range_info = stats_range(params)
             events = fetch_attendance_events(env, range_info["startDate"], range_info["endDate"])
-            totals, people = build_stats(events)
+            whitelist_profiles = fetch_whitelist_profiles(env)
+            totals, people = build_stats(events, whitelist_profiles)
             payload = {
                 "success": True,
                 **range_info,
