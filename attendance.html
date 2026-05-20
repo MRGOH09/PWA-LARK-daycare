@@ -1439,10 +1439,7 @@
       color: var(--accent-strong);
     }
     .summary {
-      grid-template-columns: repeat(4, minmax(94px, 1fr));
-      overflow-x: auto;
-      padding: 10px 12px;
-      scroll-snap-type: x proximity;
+      display: none;
     }
     .summary .card {
       min-width: 94px;
@@ -1879,7 +1876,7 @@
 
 <div id="modal-root"></div>
 
-<script src="js/attendance.js?v=standalone-v19" defer></script>
+<script src="js/attendance.js?v=standalone-v20" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
