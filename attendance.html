@@ -1544,12 +1544,12 @@
       display: grid;
       gap: 10px;
       align-items: stretch;
-      margin-bottom: 10px;
-      border-color: #dbe4ef;
-      border-radius: 16px;
-      background: #ffffff;
-      box-shadow: var(--shadow);
-      padding: 12px;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
     }
     .attendance-quick-actions {
       display: grid;
@@ -1793,7 +1793,7 @@
 <main class="attendance-wrapper" id="attendance-main">
   <div class="mobile-app-controls">
     <button class="mobile-filter-toggle" id="mobile-filter-toggle" type="button">筛选 · 日期 / 校区 / BLOCK / 年级 / 时间</button>
-    <span class="mobile-filter-meta">查漏在下方</span>
+    <span class="mobile-filter-meta">查漏在筛选里</span>
   </div>
   <div class="attendance-toolbar">
     <div class="mobile-filter-close">
@@ -1879,7 +1879,7 @@
 
 <div id="modal-root"></div>
 
-<script src="js/attendance.js?v=standalone-v18" defer></script>
+<script src="js/attendance.js?v=standalone-v19" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

@@ -96,6 +96,8 @@
   const elAttendanceList = $('#attendance-list');
   const elAttendanceCurrentRange = $('#attendance-current-range');
   const elAttendanceMain = $('#attendance-main');
+  const elAttendanceToolbar = $('.attendance-toolbar');
+  const elAttendanceQuickTools = $('.attendance-quick-tools');
   const elUnfinishedStep = $('#attendance-unfinished-step');
   const elUnfinishedToggle = $('#attendance-unfinished-toggle');
   const elUnfinishedMeta = $('#attendance-unfinished-meta');
@@ -157,6 +159,21 @@
     else if (width <= 1180) device = 'tablet';
     document.documentElement.dataset.displayMode = standalone ? 'pwa' : 'web';
     document.documentElement.dataset.device = device;
+    syncMobileQuickToolsPlacement(device === 'phone');
+  }
+
+  function syncMobileQuickToolsPlacement(isPhone) {
+    if (!elAttendanceToolbar || !elAttendanceQuickTools || !elAttendanceMain) return;
+    if (isPhone) {
+      if (elAttendanceQuickTools.parentElement !== elAttendanceToolbar) {
+        const meta = elAttendanceToolbar.querySelector('#attendance-meta');
+        elAttendanceToolbar.insertBefore(elAttendanceQuickTools, meta || null);
+      }
+      return;
+    }
+    if (elAttendanceQuickTools.parentElement === elAttendanceToolbar) {
+      elAttendanceToolbar.after(elAttendanceQuickTools);
+    }
   }
 
   function escapeHtml(s) {
