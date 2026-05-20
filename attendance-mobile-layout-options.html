@@ -511,43 +511,6 @@
     font-size: 18px;
   }
 
-  .focus-list {
-    display: grid;
-    gap: 8px;
-  }
-
-  .student-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: center;
-    border: 1px solid var(--line);
-    border-radius: 15px;
-    background: var(--panel);
-    padding: 10px;
-  }
-
-  .student-row .actions {
-    display: grid;
-    grid-template-columns: repeat(2, 66px);
-    gap: 6px;
-  }
-
-  .student-row button {
-    min-height: 34px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--soft);
-    font-size: 12px;
-    font-weight: 900;
-  }
-
-  .student-row button.primary {
-    border-color: #bbf7d0;
-    background: #dcfce7;
-    color: #166534;
-  }
-
   .setting-list {
     display: grid;
     gap: 8px;
@@ -801,21 +764,6 @@
         </div>
       </section>
 
-      <section class="focus-list" id="board-focus" hidden>
-        <div class="student-row">
-          <div class="student"><strong>阿汉亚 Aahanya</strong><span>Y1 · BLOCK A · HM · 早上</span></div>
-          <div class="actions"><button class="primary" type="button">到了</button><button type="button">缺席</button></div>
-        </div>
-        <div class="student-row">
-          <div class="student"><strong>陈伟义</strong><span>Y1 · BLOCK A · HM · 早上</span></div>
-          <div class="actions"><button class="primary" type="button">到了</button><button type="button">还没有</button></div>
-        </div>
-        <div class="student-row">
-          <div class="student"><strong>方俊豪</strong><span>Y1 · BLOCK A · HM · 早上</span></div>
-          <div class="actions"><button class="primary" type="button">到了</button><button type="button">缺席</button></div>
-        </div>
-      </section>
-
       <section class="question-box">
         <strong>我还需要你确认第 4 点：</strong>
         你说“横向表格很喜欢，但是太滑”，比较像是哪一种？1. 左右滑太敏感；2. 学生名字滑走后不知道在点谁；3. 表格太宽，要滑太远；4. 上下滑和左右滑互相抢。
@@ -866,15 +814,13 @@
   const optionButtons = document.querySelectorAll('[data-option]');
   const options = document.querySelectorAll('.option');
   const fullBoard = document.getElementById('board-full');
-  const focusBoard = document.getElementById('board-focus');
 
   optionButtons.forEach((button) => {
     button.addEventListener('click', () => {
       const option = button.dataset.option;
       optionButtons.forEach((item) => item.classList.toggle('active', item === button));
       options.forEach((item) => item.classList.toggle('active', item.id === `option-${option}`));
-      fullBoard.hidden = option === 'C';
-      focusBoard.hidden = option !== 'C';
+      fullBoard.hidden = false;
     });
   });
 
