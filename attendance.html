@@ -1828,12 +1828,13 @@
     <div class="attendance-quick-actions">
       <select id="attendance-unfinished-step" aria-label="选择未点项目">
         <option value="">全部未点项目</option>
-        <option value="arrival">到了补习中心未点</option>
-        <option value="tuition">去补习了未点</option>
-        <option value="shower">冲凉了未点</option>
-        <option value="meal">吃饭未点</option>
-        <option value="homework">功课完成未点</option>
-        <option value="extra">extra复习未点</option>
+        <option value="pickup">接生未点</option>
+        <option value="arrival">到校未点</option>
+        <option value="tuition">补习未点</option>
+        <option value="shower">冲凉未点</option>
+        <option value="meal">用餐未点</option>
+        <option value="homework">功课未点</option>
+        <option value="extra">复习未点</option>
         <option value="home">回家未点</option>
       </select>
       <button id="attendance-unfinished-toggle" type="button" aria-pressed="false">只看未点</button>
@@ -1892,7 +1893,7 @@
 
 <div id="modal-root"></div>
 
-<script src="js/attendance.js?v=standalone-v21" defer></script>
+<script src="js/attendance.js?v=standalone-v22" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

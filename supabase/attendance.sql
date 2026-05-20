@@ -30,6 +30,7 @@ create table if not exists public.attendance_records (
   block text,
   campus text,
   teacher text,
+  pickup text not null default '未点',
   arrival text not null default '未点',
   tuition text not null default '未点',
   shower text not null default '未点',
@@ -84,6 +85,7 @@ create index if not exists attendance_events_student_idx
   on public.attendance_events (student_record_id, date desc, created_at desc);
 
 alter table public.attendance_records
+  add column if not exists pickup text not null default '未点',
   add column if not exists updated_by_email text,
   add column if not exists updated_by_name text;
 

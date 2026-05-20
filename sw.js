@@ -1,8 +1,8 @@
-const CACHE = 'gantt-shell-v38';
+const CACHE = 'gantt-shell-v39';
 const ASSETS = [
   '/',
   '/index.html',
-  '/js/gantt.js?v=attendance-year-v33',
+  '/js/gantt.js?v=attendance-year-v34',
   '/attendance.html',
   '/js/attendance.js?v=standalone-v16',
   '/manifest.json'

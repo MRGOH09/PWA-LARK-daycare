@@ -18,6 +18,7 @@ from _lark import (  # noqa: E402
 )
 from _auth import AuthError, fetch_whitelist_profiles, require_attendance_auth  # noqa: E402
 from _supabase import (  # noqa: E402
+    fetch_attendance_events,
     fetch_attendance_row as fetch_supabase_attendance_row,
     fetch_attendance_rows as fetch_supabase_attendance_rows,
     insert_attendance_events,
@@ -38,6 +39,7 @@ FIELD_YEAR = "YEAR / FORM"
 FIELD_BLOCK = "BLOCK"
 FIELD_CAMPUS = "分院"
 FIELD_TEACHER = "负责老师"
+FIELD_PICKUP = "接生"
 FIELD_ARRIVAL = "到了补习中心"
 FIELD_TUITION = "去补习了"
 FIELD_SHOWER = "冲凉了"
@@ -49,6 +51,7 @@ FIELD_NOTE = "备注"
 FIELD_UPDATED_AT = "最后更新时间"
 
 STATUS_SPECS = {
+    "pickup": (FIELD_PICKUP, "未点", {"未点", "已接", "未接"}),
     "arrival": (FIELD_ARRIVAL, "未点", {"未点", "到了", "还没有", "缺席", "KOKO"}),
     "tuition": (FIELD_TUITION, "未点", {"未点", "去了", "迟进补习"}),
     "shower": (FIELD_SHOWER, "未点", {"未点", "冲了", "不冲凉"}),
@@ -86,6 +89,11 @@ WEEKDAY_ALIASES = {
 
 def today_date():
     return datetime.now(TZ).date().isoformat()
+
+
+def next_date(date_text):
+    dt = datetime.strptime(date_text, "%Y-%m-%d").date() + timedelta(days=1)
+    return dt.isoformat()
 
 
 def parse_date(value):
@@ -159,6 +167,7 @@ def normalized_attendance_record(item):
         "block": extract_text(fields.get(FIELD_BLOCK)),
         "campus": extract_text(fields.get(FIELD_CAMPUS)),
         "teacher": extract_text(fields.get(FIELD_TEACHER)),
+        "pickup": extract_text(fields.get(FIELD_PICKUP)) or "未点",
         "arrival": extract_text(fields.get(FIELD_ARRIVAL)) or "未点",
         "tuition": extract_text(fields.get(FIELD_TUITION)) or "未点",
         "shower": extract_text(fields.get(FIELD_SHOWER)) or "未点",
@@ -185,6 +194,7 @@ def normalized_supabase_record(row):
         "block": clean_text(row.get("block")),
         "campus": clean_text(row.get("campus")),
         "teacher": clean_text(row.get("teacher")),
+        "pickup": clean_text(row.get("pickup")) or "未点",
         "arrival": clean_text(row.get("arrival")) or "未点",
         "tuition": clean_text(row.get("tuition")) or "未点",
         "shower": clean_text(row.get("shower")) or "未点",
@@ -197,6 +207,29 @@ def normalized_supabase_record(row):
         "updatedByEmail": clean_text(row.get("updated_by_email")),
         "updatedByName": clean_text(row.get("updated_by_name")),
     }
+
+
+def apply_event_overrides(records, events):
+    if not records or not events:
+        return records
+    by_student = {}
+    for record in records:
+        key = clean_text(record.get("studentRecordId"))
+        if key:
+            by_student[key] = record
+    seen = set()
+    valid_steps = set(STATUS_SPECS.keys()) | {"note"}
+    for event in events:
+        student_id = clean_text(event.get("student_record_id"))
+        step = clean_text(event.get("step_key"))
+        key = (student_id, step)
+        if key in seen or step not in valid_steps:
+            continue
+        seen.add(key)
+        record = by_student.get(student_id)
+        if record is not None:
+            record[step] = clean_text(event.get("new_value"))
+    return records
 
 
 def query_params(path):
@@ -313,6 +346,15 @@ def supabase_row_from_fields(date_text, student_record_id, fields, actor=None):
     return row
 
 
+def record_with_field_statuses(record, fields):
+    out = dict(record or {})
+    for key, (field_name, default, _allowed) in STATUS_SPECS.items():
+        out[key] = clean_text(fields.get(field_name)) or default
+    if FIELD_NOTE in fields:
+        out["note"] = clean_text(fields.get(FIELD_NOTE))
+    return out
+
+
 def attendance_events_from_change(old_record, new_record, actor=None):
     events = []
     actor = actor or {}
@@ -386,6 +428,12 @@ class handler(BaseHTTPRequestHandler):
             if should_use_supabase(env):
                 rows = fetch_supabase_attendance_rows(env, date_text)
                 records = [normalized_supabase_record(row) for row in rows]
+                sync_warnings = []
+                try:
+                    events = fetch_attendance_events(env, date_text, next_date(date_text))
+                    records = apply_event_overrides(records, events)
+                except Exception as exc:
+                    sync_warnings.append(f"Supabase event overlay failed: {exc}")
                 source = "supabase"
             else:
                 if not env.get("LARK_ATTENDANCE_TABLE_ID"):
@@ -405,6 +453,7 @@ class handler(BaseHTTPRequestHandler):
                 "updatedAt": datetime.now(TZ).isoformat(timespec="seconds"),
                 "count": len(records),
                 "records": records,
+                "syncWarnings": sync_warnings if source == "supabase" else [],
             })
         except AuthError as exc:
             send_json(self, 401, {"success": False, "error": str(exc)})
@@ -425,11 +474,12 @@ class handler(BaseHTTPRequestHandler):
                 row = supabase_row_from_fields(date_text, student_record_id, fields, actor)
                 saved_row = upsert_attendance_row(env, row)
                 record = normalized_supabase_record(saved_row)
+                intended_record = record_with_field_statuses(record, fields)
                 action = "updated" if existing_row else "created"
                 duplicate_count = 1 if existing_row else 0
                 sync_warnings = []
                 try:
-                    insert_attendance_events(env, attendance_events_from_change(existing_record, record, actor))
+                    insert_attendance_events(env, attendance_events_from_change(existing_record, intended_record, actor))
                 except Exception as exc:
                     sync_warnings.append(f"Supabase event log failed: {exc}")
 
@@ -445,7 +495,7 @@ class handler(BaseHTTPRequestHandler):
                     "source": "supabase",
                     "action": action,
                     "duplicateCount": duplicate_count,
-                    "record": record,
+                    "record": intended_record,
                     "larkSync": lark_sync,
                     "syncWarnings": sync_warnings,
                 })

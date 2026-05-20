@@ -217,9 +217,10 @@
           <th>影响学生</th>
           <th>功课完成</th>
           <th>功课没完成</th>
-          <th>到补习中心</th>
-          <th>去补习</th>
-          <th>吃饭</th>
+          <th>接生</th>
+          <th>到校</th>
+          <th>补习</th>
+          <th>用餐</th>
           <th>回家</th>
         </tr>
       </thead>
@@ -232,6 +233,7 @@
             <td class="num">${escapeHtml(person.uniqueStudents || 0)}</td>
             <td class="num">${escapeHtml(person.homeworkCompleted || 0)}</td>
             <td class="num">${escapeHtml(person.homeworkNotCompleted || 0)}</td>
+            <td class="num">${escapeHtml(byStep.pickup || 0)}</td>
             <td class="num">${escapeHtml(byStep.arrival || 0)}</td>
             <td class="num">${escapeHtml(byStep.tuition || 0)}</td>
             <td class="num">${escapeHtml(byStep.meal || 0)}</td>

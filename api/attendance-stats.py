@@ -14,12 +14,13 @@ from _supabase import fetch_attendance_events, supabase_enabled  # noqa: E402
 
 TZ = timezone(timedelta(hours=8))
 STEP_LABELS = {
-    "arrival": "到了补习中心",
-    "tuition": "去补习了",
-    "shower": "冲凉了",
-    "meal": "吃饭",
-    "homework": "功课完成",
-    "extra": "extra复习",
+    "pickup": "接生",
+    "arrival": "到校",
+    "tuition": "补习",
+    "shower": "冲凉",
+    "meal": "用餐",
+    "homework": "功课",
+    "extra": "复习",
     "home": "回家",
     "note": "备注",
 }

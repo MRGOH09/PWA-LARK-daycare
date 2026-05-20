@@ -16,12 +16,13 @@
     stopMonth: 'Stop 月份'
   };
   const ATTENDANCE_STEPS = [
-    { key: 'arrival', label: '到了补习中心', defaultValue: '未点', options: ['未点', '到了', '还没有', '缺席', 'KOKO'] },
-    { key: 'tuition', label: '去补习了', defaultValue: '未点', options: ['未点', '去了', '迟进补习'] },
-    { key: 'shower', label: '冲凉了', defaultValue: '未点', options: ['未点', '冲了', '不冲凉'] },
-    { key: 'meal', label: '吃饭', defaultValue: '未点', options: ['未点', '吃饭了', '不吃饭'] },
-    { key: 'homework', label: '功课完成', defaultValue: '未点', options: ['未点', '完成了', '没完成'] },
-    { key: 'extra', label: 'extra复习', defaultValue: '未点', options: ['未点', 'extra复习了', '没有复习'] },
+    { key: 'pickup', label: '接生', defaultValue: '未点', options: ['未点', '已接', '未接'] },
+    { key: 'arrival', label: '到校', defaultValue: '未点', options: ['未点', '到了', '还没有', '缺席', 'KOKO'] },
+    { key: 'tuition', label: '补习', defaultValue: '未点', options: ['未点', '去了', '迟进补习'] },
+    { key: 'shower', label: '冲凉', defaultValue: '未点', options: ['未点', '冲了', '不冲凉'] },
+    { key: 'meal', label: '用餐', defaultValue: '未点', options: ['未点', '吃饭了', '不吃饭'] },
+    { key: 'homework', label: '功课', defaultValue: '未点', options: ['未点', '完成了', '没完成'] },
+    { key: 'extra', label: '复习', defaultValue: '未点', options: ['未点', 'extra复习了', '没有复习'] },
     { key: 'home', label: '回家', defaultValue: '未回家', options: ['未回家', '回家'] }
   ];
   const FIXED_YEAR_ORDER = ['PA', 'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'F1', 'F2', 'F3', 'F4', 'F5'];
@@ -29,6 +30,7 @@
   const PERSIST_DEBOUNCE_MS = 450;
   const LONG_PRESS_MS = 520;
   const PRIMARY_STEP_VALUES = {
+    pickup: '已接',
     arrival: '到了',
     tuition: '去了',
     shower: '冲了',
@@ -46,7 +48,7 @@
     attendanceSearch: '',
     attendanceFilters: { campus: '', block: '', year: '', time: '' },
     showUnfinishedOnly: false,
-    unfinishedStep: 'arrival',
+    unfinishedStep: 'pickup',
     attendanceLoaded: false,
     attendanceSavingKeys: new Set(),
     attendanceSyncText: '尚未同步点名记录',
@@ -601,10 +603,10 @@
 
   function attendanceTone(value) {
     if (value === '未点' || value === '未回家') return 'idle';
-    if (value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
+    if (value === '已接' || value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
         value === '完成了' || value === 'extra复习了') return 'good';
     if (value === '回家') return 'home';
-    if (value === '还没有' || value === '迟进补习' || value === '没完成' || value === '没有复习') return 'warn';
+    if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '没完成' || value === '没有复习') return 'warn';
     if (value === '缺席' || value === '不冲凉' || value === '不吃饭') return 'bad';
     if (value === 'KOKO') return 'koko';
     return 'idle';
@@ -687,10 +689,11 @@
     const cards = [
       { label: '应点人数', value: list.length },
       { label: '已开始点名', value: marked },
-      { label: '到了', value: count((rec) => rec.arrival === '到了'), cls: 'normal' },
+      { label: '已接', value: count((rec) => rec.pickup === '已接'), cls: 'normal' },
+      { label: '到校', value: count((rec) => rec.arrival === '到了'), cls: 'normal' },
       { label: '还没有/缺席', value: count((rec) => rec.arrival === '还没有' || rec.arrival === '缺席'), cls: 'warning' },
       { label: 'KOKO', value: count((rec) => rec.arrival === 'KOKO') },
-      { label: '已去补习', value: count((rec) => rec.tuition === '去了' || rec.tuition === '迟进补习'), cls: 'normal' },
+      { label: '已补习', value: count((rec) => rec.tuition === '去了' || rec.tuition === '迟进补习'), cls: 'normal' },
       { label: '已回家', value: count((rec) => rec.home === '回家'), cls: 'normal' },
       { label: '功课没完成', value: count((rec) => rec.homework === '没完成'), cls: 'warning' }
     ];
@@ -728,7 +731,7 @@
       const record = attendanceRecordFor(rec);
       for (const step of ATTENDANCE_STEPS) {
         const value = record[step.key];
-        if (['还没有', '缺席', 'KOKO', '迟进补习', '不冲凉', '不吃饭', '没完成', '没有复习'].includes(value)) {
+        if (['未接', '还没有', '缺席', 'KOKO', '迟进补习', '不冲凉', '不吃饭', '没完成', '没有复习'].includes(value)) {
           alerts.push({ rec, step, value });
         }
       }
@@ -1013,13 +1016,13 @@
   }
 
   function isAttendanceFollowupDisabled(step, record) {
-    return record.arrival === '缺席' && step.key !== 'arrival';
+    return record.arrival === '缺席' && !['pickup', 'arrival'].includes(step.key);
   }
 
   function attendancePatchForStep(step, value) {
     const patch = { [step.key]: value };
     if (step.key === 'arrival' && value === '缺席') {
-      ATTENDANCE_STEPS.filter((item) => item.key !== 'arrival').forEach((item) => {
+      ATTENDANCE_STEPS.filter((item) => !['pickup', 'arrival'].includes(item.key)).forEach((item) => {
         patch[item.key] = item.defaultValue;
       });
     }
@@ -1521,7 +1524,7 @@
       const effectiveArrival = patch.arrival || record.arrival;
       elModalRoot.querySelectorAll('[data-att-modal-step]').forEach((btn) => {
         const stepKey = btn.getAttribute('data-att-modal-step') || '';
-        const disabled = effectiveArrival === '缺席' && stepKey !== 'arrival';
+        const disabled = effectiveArrival === '缺席' && !['pickup', 'arrival'].includes(stepKey);
         btn.disabled = disabled;
         btn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
         btn.classList.toggle('disabled', disabled);
@@ -1543,7 +1546,7 @@
         const value = btn.getAttribute('data-att-modal-value') || '';
         patch[stepKey] = value;
         if (stepKey === 'arrival' && value === '缺席') {
-          ATTENDANCE_STEPS.filter((step) => step.key !== 'arrival').forEach((step) => {
+          ATTENDANCE_STEPS.filter((step) => !['pickup', 'arrival'].includes(step.key)).forEach((step) => {
             delete patch[step.key];
             resetModalStepSelection(step.key, record[step.key] || step.defaultValue);
           });

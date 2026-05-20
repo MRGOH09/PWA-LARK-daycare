@@ -120,11 +120,19 @@ def upsert_attendance_row(env, row):
     config = supabase_config(env)
     if not config:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
-    resp = post_attendance_row(config, row)
+    post_row = row
+    resp = post_attendance_row(config, post_row)
+    if resp.status_code >= 400 and "pickup" in (resp.text or ""):
+        post_row = {
+            key: value
+            for key, value in row.items()
+            if key != "pickup"
+        }
+        resp = post_attendance_row(config, post_row)
     if resp.status_code >= 400 and "updated_by_" in (resp.text or ""):
         legacy_row = {
             key: value
-            for key, value in row.items()
+            for key, value in post_row.items()
             if key not in {"updated_by_email", "updated_by_name"}
         }
         resp = post_attendance_row(config, legacy_row)

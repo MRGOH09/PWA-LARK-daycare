@@ -5,14 +5,15 @@
   var ROTATE_MS = 8000;
   var PIN_KEY = 'tv-attendance-pin-v1';
   var SCOPE_KEY = 'tv-attendance-scope-v1';
-  var STUDENT_FIELDS = ['arrival', 'tuition', 'shower', 'meal', 'homework', 'extra', 'home'];
+  var STUDENT_FIELDS = ['pickup', 'arrival', 'tuition', 'shower', 'meal', 'homework', 'extra', 'home'];
   var FLOW_STEPS = [
-    { key: 'arrival', label: '到', full: '到了补习中心', defaultValue: '未点' },
-    { key: 'tuition', label: '补', full: '去补习了', defaultValue: '未点' },
-    { key: 'shower', label: '冲', full: '冲凉了', defaultValue: '未点' },
-    { key: 'meal', label: '饭', full: '吃饭', defaultValue: '未点' },
-    { key: 'homework', label: '功', full: '功课完成', defaultValue: '未点' },
-    { key: 'extra', label: '复', full: 'extra复习', defaultValue: '未点' },
+    { key: 'pickup', label: '接', full: '接生', defaultValue: '未点' },
+    { key: 'arrival', label: '到', full: '到校', defaultValue: '未点' },
+    { key: 'tuition', label: '补', full: '补习', defaultValue: '未点' },
+    { key: 'shower', label: '冲', full: '冲凉', defaultValue: '未点' },
+    { key: 'meal', label: '餐', full: '用餐', defaultValue: '未点' },
+    { key: 'homework', label: '功', full: '功课', defaultValue: '未点' },
+    { key: 'extra', label: '复', full: '复习', defaultValue: '未点' },
     { key: 'home', label: '回', full: '回家', defaultValue: '未回家' }
   ];
   var GROUPS = [
@@ -267,6 +268,7 @@
 
   function defaultAttendance() {
     return {
+      pickup: '未点',
       arrival: '未点',
       tuition: '未点',
       shower: '未点',
@@ -350,10 +352,10 @@
 
   function toneForValue(value) {
     if (value === '未点' || value === '未回家') return 'idle';
-    if (value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
+    if (value === '已接' || value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
       value === '完成了' || value === 'extra复习了') return 'good';
     if (value === '回家') return 'home';
-    if (value === '还没有' || value === '迟进补习' || value === '没完成' || value === '没有复习') return 'warn';
+    if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '没完成' || value === '没有复习') return 'warn';
     if (value === '缺席' || value === '不冲凉' || value === '不吃饭') return 'bad';
     if (value === 'KOKO') return 'koko';
     return 'idle';
