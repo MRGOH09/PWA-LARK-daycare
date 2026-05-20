@@ -1162,7 +1162,7 @@
         const btn = row.querySelector(`[data-att-primary-student="${cssAttr(studentId)}"][data-att-step="${cssAttr(step.key)}"]`);
         if (btn) updateAttendanceButton(btn, rec, step, record);
       });
-      const noteBtn = row.querySelector(`[data-att-open-student="${cssAttr(studentId)}"]`);
+      const noteBtn = row.querySelector(`.attendance-note-btn[data-att-open-student="${cssAttr(studentId)}"]`);
       if (noteBtn) {
         noteBtn.textContent = record.note ? '有备注' : '备注';
         noteBtn.classList.toggle('has-note', Boolean(record.note));
@@ -1182,7 +1182,8 @@
     return `<tr class="${markedClass} ${matchClass} ${unfinishedClass}" data-att-row-student="${escapeHtml(attendanceStudentId(rec))}">
       <td>
         <div class="attendance-student-cell">
-          <strong class="attendance-student-name">${escapeHtml(name)}</strong>
+          <button class="attendance-student-name attendance-student-name-trigger" type="button"
+            data-att-open-student="${escapeHtml(attendanceStudentId(rec))}">${escapeHtml(name)}</button>
           <span>No.${escapeHtml(no)} · ${escapeHtml(studentValue(rec, STUDENT_FIELDS.year) || '-')} · ${escapeHtml(studentValue(rec, STUDENT_FIELDS.block) || '-')}</span>
           <span>${escapeHtml(studentValue(rec, STUDENT_FIELDS.campus) || '-')} · ${escapeHtml(attendanceTimeSegment(rec))}${escapeHtml(unfinishedText)}</span>
         </div>
@@ -1292,7 +1293,8 @@
     return `<article class="attendance-student-card ${markedClass} ${unfinishedClass}">
       <div class="attendance-card-head">
         <div class="attendance-card-name">
-          <strong>${escapeHtml(name)}</strong>
+          <button class="attendance-card-name-trigger" type="button"
+            data-att-open-student="${escapeHtml(attendanceStudentId(rec))}">${escapeHtml(name)}</button>
           <span>No.${escapeHtml(no)} · ${escapeHtml(year)}</span>
         </div>
         <button class="attendance-note-btn ${record.note ? 'has-note' : ''}" type="button"

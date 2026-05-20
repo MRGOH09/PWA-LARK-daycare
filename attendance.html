@@ -622,6 +622,20 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .attendance-student-name-trigger,
+  .attendance-card-name-trigger {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+  .attendance-student-name-trigger:hover,
+  .attendance-card-name-trigger:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
+  }
   .attendance-student-cell span {
     color: var(--muted);
     font-size: 11px;
@@ -1293,10 +1307,12 @@
   .attendance-card-name {
     min-width: 0;
   }
-  .attendance-card-name strong {
+  .attendance-card-name strong,
+  .attendance-card-name-trigger {
     display: block;
     color: var(--text);
     font-size: 18px;
+    font-weight: 900;
     line-height: 1.22;
     overflow-wrap: anywhere;
   }
@@ -1876,7 +1892,7 @@
 
 <div id="modal-root"></div>
 
-<script src="js/attendance.js?v=standalone-v20" defer></script>
+<script src="js/attendance.js?v=standalone-v21" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
