@@ -234,6 +234,117 @@
     gap: 8px;
   }
 
+  .completion-panel {
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--panel);
+    padding: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  .completion-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .completion-head strong {
+    font-size: 15px;
+  }
+
+  .completion-head span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .mode-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .mode-tabs button {
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--soft);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .mode-tabs button.active {
+    border-color: #bae6fd;
+    background: var(--accent-2);
+    color: #075985;
+  }
+
+  .unfinished-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .unfinished-tools select {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--soft);
+    color: var(--text);
+    padding: 8px 10px;
+    font-weight: 800;
+  }
+
+  .unfinished-count {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: #fff7ed;
+    color: #9a3412;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .miss-strip {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(112px, 1fr);
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .miss-strip::-webkit-scrollbar { display: none; }
+
+  .miss-card {
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    background: var(--soft);
+    padding: 9px;
+  }
+
+  .miss-card span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .miss-card strong {
+    display: block;
+    margin-top: 3px;
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+  }
+
   .mini-card {
     border: 1px solid var(--line);
     border-radius: 14px;
@@ -604,13 +715,45 @@
         <div class="mini-card"><span>未完成</span><strong>57</strong></div>
       </section>
 
+      <section class="completion-panel" id="completion-panel">
+        <div class="completion-head">
+          <div>
+            <strong>点名范围</strong><br />
+            <span>保留原本一次看完未点名的工作流</span>
+          </div>
+          <span class="pill active">查漏</span>
+        </div>
+        <div class="mode-tabs" aria-label="点名范围">
+          <button class="active" type="button" data-mode="all">全部学生</button>
+          <button type="button" data-mode="unfinished">全部未完成</button>
+          <button type="button" data-mode="step">单步骤未点</button>
+        </div>
+        <div class="unfinished-tools">
+          <select aria-label="选择未完成步骤">
+            <option>到了补习中心未点</option>
+            <option>去补习了未点</option>
+            <option>冲凉了未点</option>
+            <option>吃饭未点</option>
+            <option>功课完成未点</option>
+            <option>回家未点</option>
+          </select>
+          <span class="unfinished-count" id="unfinished-count">57 人</span>
+        </div>
+        <div class="miss-strip" aria-label="各步骤未完成数量">
+          <div class="miss-card"><span>到了补习中心</span><strong>26 未点</strong></div>
+          <div class="miss-card"><span>去补习了</span><strong>57 未点</strong></div>
+          <div class="miss-card"><span>冲凉了</span><strong>57 未点</strong></div>
+          <div class="miss-card"><span>吃饭</span><strong>57 未点</strong></div>
+        </div>
+      </section>
+
       <section class="board-shell" id="board-full">
         <div class="board-head">
           <div>
-            <h2>全部年级 · BLOCK A · HM · 早上</h2>
-            <span>保留横向表格，但固定学生栏</span>
+            <h2 id="board-title">全部年级 · BLOCK A · HM · 早上</h2>
+            <span id="board-subtitle">保留横向表格，但固定学生栏</span>
           </div>
-          <span>58人</span>
+          <span id="board-count">58人</span>
         </div>
         <div class="board-scroll">
           <table>
@@ -732,6 +875,44 @@
       options.forEach((item) => item.classList.toggle('active', item.id === `option-${option}`));
       fullBoard.hidden = option === 'C';
       focusBoard.hidden = option !== 'C';
+    });
+  });
+
+  const modeButtons = document.querySelectorAll('[data-mode]');
+  const boardTitle = document.getElementById('board-title');
+  const boardSubtitle = document.getElementById('board-subtitle');
+  const boardCount = document.getElementById('board-count');
+  const unfinishedCount = document.getElementById('unfinished-count');
+
+  const modeCopy = {
+    all: {
+      title: '全部年级 · BLOCK A · HM · 早上',
+      subtitle: '保留横向表格，但固定学生栏',
+      count: '58人',
+      badge: '57 人'
+    },
+    unfinished: {
+      title: '全部未完成 · BLOCK A · HM · 早上',
+      subtitle: '一次看完还有任何项目未点的学生',
+      count: '57人',
+      badge: '57 人'
+    },
+    step: {
+      title: '到了补习中心未点 · BLOCK A · HM · 早上',
+      subtitle: '只看这个步骤还没处理的学生',
+      count: '26人',
+      badge: '26 人'
+    }
+  };
+
+  modeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const mode = modeCopy[button.dataset.mode] || modeCopy.all;
+      modeButtons.forEach((item) => item.classList.toggle('active', item === button));
+      boardTitle.textContent = mode.title;
+      boardSubtitle.textContent = mode.subtitle;
+      boardCount.textContent = mode.count;
+      unfinishedCount.textContent = mode.badge;
     });
   });
 
