@@ -863,6 +863,13 @@
     return teacherStatsDateLabel((data && data.date) || state.teacherStatsDate);
   }
 
+  function teacherStatsSteps(data) {
+    const labels = data && data.stepLabels ? data.stepLabels : {};
+    return Object.keys(labels)
+      .filter((key) => key !== 'note')
+      .map((key) => ({ key, label: labels[key] || key }));
+  }
+
   function isStatsView() {
     return state.currentView === 'stats';
   }
@@ -934,9 +941,20 @@
     }
     const people = Array.isArray(data.people) ? data.people : [];
     const totals = data.totals || {};
+    const steps = teacherStatsSteps(data);
+    const totalsByStep = totals.byStep || {};
+    const stepSummary = steps.map((step) => `
+      <article class="teacher-stats-step-card">
+        <span>${escapeHtml(step.label)}</span>
+        <strong>${escapeHtml(String(totalsByStep[step.key] || 0))}</strong>
+      </article>
+    `).join('');
     elTeacherStatsMeta.textContent = `${teacherStatsLabel(data)} · 总点名 ${totals.attendanceActions || 0} 次 · ${people.length} 位老师 · 更新 ${data.updatedAt || '-'}`;
     if (!people.length) {
-      elTeacherStatsTable.innerHTML = `<div class="teacher-stats-empty">这个${state.teacherStatsRange === 'month' ? '月份' : '日期'}还没有点名记录。</div>`;
+      elTeacherStatsTable.innerHTML = `
+        <div class="teacher-stats-step-grid">${stepSummary}</div>
+        <div class="teacher-stats-empty">这个${state.teacherStatsRange === 'month' ? '月份' : '日期'}还没有点名记录。</div>
+      `;
       return;
     }
     const rows = people
@@ -953,18 +971,22 @@
           </td>
           <td class="num"><strong>${escapeHtml(String(person.attendanceActions || 0))}</strong></td>
           <td class="num">${escapeHtml(String(person.uniqueStudents || 0))}</td>
+          ${steps.map((step) => `<td class="num">${escapeHtml(String((person.byStep || {})[step.key] || 0))}</td>`).join('')}
           <td class="num">${escapeHtml(String(person.homeworkCompleted || 0))}</td>
           <td class="num">${escapeHtml(String(person.homeworkNotCompleted || 0))}</td>
           <td class="num">${escapeHtml(String(person.totalActions || 0))}</td>
         </tr>
       `).join('');
-    elTeacherStatsTable.innerHTML = `<table class="teacher-stats-table">
+    elTeacherStatsTable.innerHTML = `
+      <div class="teacher-stats-step-grid">${stepSummary}</div>
+      <table class="teacher-stats-table">
       <thead>
         <tr>
           <th>#</th>
           <th>老师</th>
           <th class="num">点名次数</th>
           <th class="num">学生数</th>
+          ${steps.map((step) => `<th class="num">${escapeHtml(step.label)}</th>`).join('')}
           <th class="num">功课完成</th>
           <th class="num">功课没完成</th>
           <th class="num">总操作</th>

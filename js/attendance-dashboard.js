@@ -191,14 +191,24 @@
 
   function renderSummary(data) {
     const totals = data.totals || {};
+    const steps = statsSteps(data);
+    const byStep = totals.byStep || {};
     const cards = [
       ['记录人数', (data.people || []).length],
       ['点名操作', totals.attendanceActions || 0],
       ['影响学生', totals.uniqueStudents || 0],
+      ...steps.map((step) => [step.label, byStep[step.key] || 0]),
       ['功课完成', totals.homeworkCompleted || 0],
       ['功课没完成', totals.homeworkNotCompleted || 0]
     ];
     elSummary.innerHTML = cards.map(([label, value]) => `<article class="card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join('');
+  }
+
+  function statsSteps(data) {
+    const labels = data && data.stepLabels ? data.stepLabels : {};
+    return Object.keys(labels)
+      .filter((key) => key !== 'note')
+      .map((key) => ({ key, label: labels[key] || key }));
   }
 
   function renderTable(data) {
@@ -208,6 +218,7 @@
       elContent.textContent = `这个${state.range === 'month' ? '月份' : '日期'}暂时没有点名操作记录。`;
       return;
     }
+    const steps = statsSteps(data);
     elContent.className = 'table-wrap';
     elContent.innerHTML = `<table>
       <thead>
@@ -215,13 +226,9 @@
           <th>老师</th>
           <th>点名操作</th>
           <th>影响学生</th>
+          ${steps.map((step) => `<th>${escapeHtml(step.label)}</th>`).join('')}
           <th>功课完成</th>
           <th>功课没完成</th>
-          <th>接生</th>
-          <th>到校</th>
-          <th>补习</th>
-          <th>用餐</th>
-          <th>回家</th>
         </tr>
       </thead>
       <tbody>
@@ -231,13 +238,9 @@
             <td class="name"><strong>${escapeHtml(person.name || person.email || '未记录')}</strong><span>${escapeHtml(person.email || '')}</span></td>
             <td class="num">${escapeHtml(person.attendanceActions || 0)}</td>
             <td class="num">${escapeHtml(person.uniqueStudents || 0)}</td>
+            ${steps.map((step) => `<td class="num">${escapeHtml(byStep[step.key] || 0)}</td>`).join('')}
             <td class="num">${escapeHtml(person.homeworkCompleted || 0)}</td>
             <td class="num">${escapeHtml(person.homeworkNotCompleted || 0)}</td>
-            <td class="num">${escapeHtml(byStep.pickup || 0)}</td>
-            <td class="num">${escapeHtml(byStep.arrival || 0)}</td>
-            <td class="num">${escapeHtml(byStep.tuition || 0)}</td>
-            <td class="num">${escapeHtml(byStep.meal || 0)}</td>
-            <td class="num">${escapeHtml(byStep.home || 0)}</td>
           </tr>`;
         }).join('')}
       </tbody>

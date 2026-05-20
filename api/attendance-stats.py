@@ -140,6 +140,7 @@ def build_stats(events, whitelist_profiles=None):
         "homeworkCompleted": 0,
         "homeworkNotCompleted": 0,
         "uniqueStudents": 0,
+        "byStep": {step: 0 for step in STEP_LABELS},
     }
     all_students = set()
 
@@ -159,6 +160,7 @@ def build_stats(events, whitelist_profiles=None):
             totals["attendanceActions"] += 1
         if step in person["byStep"]:
             person["byStep"][step] += 1
+            totals["byStep"][step] += 1
         if student_id:
             person["_students"].add(student_id)
             all_students.add(student_id)
