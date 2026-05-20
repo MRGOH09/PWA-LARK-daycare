@@ -16,7 +16,7 @@ from _lark import (  # noqa: E402
     read_json_body,
     send_json,
 )
-from _auth import AuthError, require_attendance_auth  # noqa: E402
+from _auth import AuthError, fetch_whitelist_profiles, require_attendance_auth  # noqa: E402
 from _supabase import (  # noqa: E402
     fetch_attendance_row as fetch_supabase_attendance_row,
     fetch_attendance_rows as fetch_supabase_attendance_rows,
@@ -276,10 +276,17 @@ def should_sync_lark(env):
     return raw not in {"0", "false", "no", "off"} and bool(env.get("LARK_ATTENDANCE_TABLE_ID"))
 
 
-def actor_from_auth(user):
+def actor_from_auth(user, env=None):
     user = user or {}
     email = clean_text(user.get("email")).lower()
     name = clean_text(user.get("name")) or email
+    if email and env:
+        try:
+            formal_name = clean_text((fetch_whitelist_profiles(env).get(email) or {}).get("name"))
+            if formal_name:
+                name = formal_name
+        except Exception:
+            pass
     return {"email": email, "name": name}
 
 
@@ -408,7 +415,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             env = get_env()
             auth_user = require_attendance_auth(self, env)
-            actor = actor_from_auth(auth_user)
+            actor = actor_from_auth(auth_user, env)
             body = read_json_body(self)
             date_text, student_record_id, fields = sanitize_attendance_payload(body)
 
