@@ -9,6 +9,7 @@ from _lark import (
     fetch_student_records, get_env, get_tenant_access_token,
     normalize_generic_record, send_json,
 )
+from _auth import AuthError, require_attendance_auth
 
 CACHE_TTL_SECONDS = 60
 STUDENTS_CACHE = {
@@ -47,6 +48,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             env = get_env()
+            require_attendance_auth(self, env)
             table_id = env.get("LARK_STUDENT_TABLE_ID", "")
             now = time.time()
             if (
@@ -66,6 +68,8 @@ class handler(BaseHTTPRequestHandler):
             STUDENTS_CACHE["table_id"] = table_id
             STUDENTS_CACHE["expires_at"] = now + CACHE_TTL_SECONDS
             send_json(self, 200, payload)
+        except AuthError as exc:
+            send_json(self, 401, {"success": False, "error": str(exc)})
         except Exception as exc:
             send_json(self, 500, {"success": False, "error": str(exc)})
 

@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#0f172a" />
 <title>DAYCARE PWA</title>
 <link rel="manifest" href="manifest.json" />
+<script>
+  (function () {
+    var host = window.location.hostname;
+    if (host.endsWith('.vercel.app') && host.includes('attendance') && window.location.pathname === '/') {
+      window.location.replace('/attendance.html');
+    }
+  })();
+</script>
 <style>
   :root {
     --bg: #0f172a;

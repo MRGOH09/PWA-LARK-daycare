@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>点名统计 Dashboard</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --good: #34d399;
+    --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: end;
+    padding: 18px 20px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { margin: 0; font-size: 22px; }
+  p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+  a, button {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 8px 12px;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #07111f; }
+  main { display: grid; gap: 14px; padding: 16px 20px 28px; }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  input {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+  .range-toggle {
+    display: inline-grid;
+    grid-auto-flow: column;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+  }
+  .range-toggle button {
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    padding: 7px 12px;
+  }
+  .range-toggle button.active {
+    background: var(--accent);
+    color: #07111f;
+  }
+  .meta { color: var(--muted); font-size: 12px; }
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px;
+  }
+  .card span { color: var(--muted); font-size: 12px; }
+  .card strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 26px;
+    font-variant-numeric: tabular-nums;
+  }
+  .table-wrap {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+  table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th, td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  th {
+    position: sticky;
+    top: 0;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .name strong { display: block; }
+  .name span { color: var(--muted); font-size: 12px; }
+  .empty {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--muted);
+    padding: 18px;
+    text-align: center;
+  }
+  .auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    background: rgba(15, 23, 42, 0.94);
+    padding: 22px;
+  }
+  .auth-gate[hidden] { display: none; }
+  .auth-panel {
+    width: min(420px, 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 22px;
+    text-align: center;
+  }
+  .google-signin-button { display: flex; justify-content: center; min-height: 44px; margin-top: 16px; }
+  @media (max-width: 720px) {
+    header { display: grid; }
+    .toolbar input, .toolbar button, .toolbar a { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>点名统计 Dashboard</h1>
+    <p>按每天或每月查看每位老师的点名操作与功课完成记录</p>
+  </div>
+  <a href="/attendance.html">回到点名</a>
+</header>
+
+<section class="auth-gate" id="auth-gate" hidden>
+  <div class="auth-panel">
+    <h2>Google 登录</h2>
+    <p>统计 dashboard 只开放给 Lark 白名单内的老师账号。</p>
+    <div id="google-signin-button" class="google-signin-button"></div>
+    <p id="auth-status">正在检查登录状态…</p>
+  </div>
+</section>
+
+<main>
+  <div class="toolbar">
+    <div class="range-toggle" aria-label="统计范围">
+      <button class="active" id="range-day" type="button" data-range="day">每天</button>
+      <button id="range-month" type="button" data-range="month">每月</button>
+    </div>
+    <input id="date" type="date" aria-label="统计日期" />
+    <input id="month" type="month" aria-label="统计月份" />
+    <button id="refresh" class="primary" type="button">刷新</button>
+    <button id="sign-out" type="button" hidden>登出</button>
+    <span id="meta" class="meta">尚未加载</span>
+  </div>
+  <section class="summary" id="summary"></section>
+  <section id="content" class="empty">加载统计中…</section>
+</main>
+
+<script src="js/attendance-dashboard.js?v=2" defer></script>
+</body>
+</html>

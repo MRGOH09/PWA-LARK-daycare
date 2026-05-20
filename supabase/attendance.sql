@@ -42,6 +42,8 @@ create table if not exists public.attendance_records (
   lark_sync_status text not null default 'pending',
   lark_synced_at timestamptz,
   lark_sync_error text,
+  updated_by_email text,
+  updated_by_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint attendance_records_student_day_unique unique (date, student_record_id)
@@ -70,6 +72,8 @@ create table if not exists public.attendance_events (
   old_value text,
   new_value text,
   source text not null default 'pwa',
+  actor_email text,
+  actor_name text,
   created_at timestamptz not null default now()
 );
 
@@ -78,6 +82,17 @@ create index if not exists attendance_events_record_idx
 
 create index if not exists attendance_events_student_idx
   on public.attendance_events (student_record_id, date desc, created_at desc);
+
+alter table public.attendance_records
+  add column if not exists updated_by_email text,
+  add column if not exists updated_by_name text;
+
+alter table public.attendance_events
+  add column if not exists actor_email text,
+  add column if not exists actor_name text;
+
+create index if not exists attendance_events_actor_month_idx
+  on public.attendance_events (actor_email, date desc, created_at desc);
 
 alter table public.attendance_records enable row level security;
 alter table public.attendance_events enable row level security;

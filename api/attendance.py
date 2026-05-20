@@ -16,6 +16,7 @@ from _lark import (  # noqa: E402
     read_json_body,
     send_json,
 )
+from _auth import AuthError, require_attendance_auth  # noqa: E402
 from _supabase import (  # noqa: E402
     fetch_attendance_row as fetch_supabase_attendance_row,
     fetch_attendance_rows as fetch_supabase_attendance_rows,
@@ -193,6 +194,8 @@ def normalized_supabase_record(row):
         "home": clean_text(row.get("home")) or "未回家",
         "note": clean_text(row.get("note")),
         "updatedAt": clean_text(row.get("updated_at")),
+        "updatedByEmail": clean_text(row.get("updated_by_email")),
+        "updatedByName": clean_text(row.get("updated_by_name")),
     }
 
 
@@ -273,7 +276,15 @@ def should_sync_lark(env):
     return raw not in {"0", "false", "no", "off"} and bool(env.get("LARK_ATTENDANCE_TABLE_ID"))
 
 
-def supabase_row_from_fields(date_text, student_record_id, fields):
+def actor_from_auth(user):
+    user = user or {}
+    email = clean_text(user.get("email")).lower()
+    name = clean_text(user.get("name")) or email
+    return {"email": email, "name": name}
+
+
+def supabase_row_from_fields(date_text, student_record_id, fields, actor=None):
+    actor = actor or {}
     row = {
         "date": date_text,
         "weekday": clean_text(fields.get(FIELD_WEEKDAY)) or None,
@@ -287,14 +298,17 @@ def supabase_row_from_fields(date_text, student_record_id, fields):
         "teacher": clean_text(fields.get(FIELD_TEACHER)),
         "note": clean_text(fields.get(FIELD_NOTE)),
         "updated_at": ms_to_iso(fields.get(FIELD_UPDATED_AT)),
+        "updated_by_email": clean_text(actor.get("email")).lower(),
+        "updated_by_name": clean_text(actor.get("name")),
     }
     for key, (field_name, _default, _allowed) in STATUS_SPECS.items():
         row[key] = clean_text(fields.get(field_name))
     return row
 
 
-def attendance_events_from_change(old_record, new_record):
+def attendance_events_from_change(old_record, new_record, actor=None):
     events = []
+    actor = actor or {}
     old_record = old_record or {}
     attendance_record_id = new_record.get("recordId")
     if not attendance_record_id:
@@ -314,6 +328,8 @@ def attendance_events_from_change(old_record, new_record):
             "old_value": old_value,
             "new_value": new_value,
             "source": "pwa",
+            "actor_email": clean_text(actor.get("email")).lower(),
+            "actor_name": clean_text(actor.get("name")),
         })
     if old_record and old_record.get("note", "") != new_record.get("note", ""):
         events.append({
@@ -324,6 +340,8 @@ def attendance_events_from_change(old_record, new_record):
             "old_value": old_record.get("note", ""),
             "new_value": new_record.get("note", ""),
             "source": "pwa",
+            "actor_email": clean_text(actor.get("email")).lower(),
+            "actor_name": clean_text(actor.get("name")),
         })
     return events
 
@@ -355,6 +373,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             env = get_env()
+            require_attendance_auth(self, env)
             params = query_params(self.path)
             date_text = parse_date((params.get("date") or [""])[0])
             if should_use_supabase(env):
@@ -380,26 +399,30 @@ class handler(BaseHTTPRequestHandler):
                 "count": len(records),
                 "records": records,
             })
+        except AuthError as exc:
+            send_json(self, 401, {"success": False, "error": str(exc)})
         except Exception as exc:
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_POST(self):
         try:
             env = get_env()
+            auth_user = require_attendance_auth(self, env)
+            actor = actor_from_auth(auth_user)
             body = read_json_body(self)
             date_text, student_record_id, fields = sanitize_attendance_payload(body)
 
             if should_use_supabase(env):
                 existing_row = fetch_supabase_attendance_row(env, date_text, student_record_id)
                 existing_record = normalized_supabase_record(existing_row) if existing_row else None
-                row = supabase_row_from_fields(date_text, student_record_id, fields)
+                row = supabase_row_from_fields(date_text, student_record_id, fields, actor)
                 saved_row = upsert_attendance_row(env, row)
                 record = normalized_supabase_record(saved_row)
                 action = "updated" if existing_row else "created"
                 duplicate_count = 1 if existing_row else 0
                 sync_warnings = []
                 try:
-                    insert_attendance_events(env, attendance_events_from_change(existing_record, record))
+                    insert_attendance_events(env, attendance_events_from_change(existing_record, record, actor))
                 except Exception as exc:
                     sync_warnings.append(f"Supabase event log failed: {exc}")
 
@@ -431,6 +454,8 @@ class handler(BaseHTTPRequestHandler):
                     "duplicateCount": result["duplicateCount"],
                     "record": result["record"],
                 })
+        except AuthError as exc:
+            send_json(self, 401, {"success": False, "error": str(exc)})
         except Exception as exc:
             send_json(self, 500, {"success": False, "error": str(exc)})
 

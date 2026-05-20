@@ -120,16 +120,27 @@ def upsert_attendance_row(env, row):
     config = supabase_config(env)
     if not config:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
-    resp = requests.post(
+    resp = post_attendance_row(config, row)
+    if resp.status_code >= 400 and "updated_by_" in (resp.text or ""):
+        legacy_row = {
+            key: value
+            for key, value in row.items()
+            if key not in {"updated_by_email", "updated_by_name"}
+        }
+        resp = post_attendance_row(config, legacy_row)
+    raise_supabase_error(resp, "upsert attendance")
+    rows = resp.json() or []
+    return rows[0] if rows else {}
+
+
+def post_attendance_row(config, row):
+    return requests.post(
         table_url(config, config["attendance_table"]),
         headers=supabase_headers(config, "resolution=merge-duplicates,return=representation"),
         params={"on_conflict": "date,student_record_id"},
         json=row,
         timeout=15,
     )
-    raise_supabase_error(resp, "upsert attendance")
-    rows = resp.json() or []
-    return rows[0] if rows else {}
 
 
 def insert_attendance_events(env, events):
@@ -138,11 +149,44 @@ def insert_attendance_events(env, events):
     config = supabase_config(env)
     if not config:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
-    resp = requests.post(
+    resp = post_attendance_events(config, events)
+    if resp.status_code >= 400 and "actor_" in (resp.text or ""):
+        legacy_events = [
+            {
+                key: value
+                for key, value in event.items()
+                if key not in {"actor_email", "actor_name"}
+            }
+            for event in events
+        ]
+        resp = post_attendance_events(config, legacy_events)
+    raise_supabase_error(resp, "insert attendance events")
+    return resp.json() or []
+
+
+def post_attendance_events(config, events):
+    return requests.post(
         table_url(config, config["events_table"]),
         headers=supabase_headers(config, "return=representation"),
         json=events,
         timeout=15,
     )
-    raise_supabase_error(resp, "insert attendance events")
+
+
+def fetch_attendance_events(env, start_date, end_date):
+    config = supabase_config(env)
+    if not config:
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+    resp = requests.get(
+        table_url(config, config["events_table"]),
+        headers=supabase_headers(config),
+        params=[
+            ("select", "*"),
+            ("date", f"gte.{start_date}"),
+            ("date", f"lt.{end_date}"),
+            ("order", "created_at.desc"),
+        ],
+        timeout=15,
+    )
+    raise_supabase_error(resp, "fetch attendance events")
     return resp.json() or []

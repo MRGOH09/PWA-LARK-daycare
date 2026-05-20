@@ -1,11 +1,11 @@
-const CACHE = 'gantt-shell-v38';
+const CACHE = 'attendance-shell-v16';
 const ASSETS = [
   '/',
-  '/index.html',
-  '/js/gantt.js?v=attendance-year-v33',
   '/attendance.html',
+  '/attendance-dashboard.html',
+  '/attendance.webmanifest',
   '/js/attendance.js?v=standalone-v16',
-  '/manifest.json'
+  '/js/attendance-dashboard.js?v=2'
 ];
 
 self.addEventListener('install', (event) => {
@@ -18,7 +18,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();
@@ -29,10 +29,7 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-
-  if (url.pathname.startsWith('/api/')) {
-    return;
-  }
+  if (url.pathname.startsWith('/api/')) return;
 
   const networkFirst = req.mode === 'navigate' ||
     url.pathname.endsWith('.html') ||
