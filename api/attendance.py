@@ -53,7 +53,7 @@ FIELD_UPDATED_AT = "最后更新时间"
 STATUS_SPECS = {
     "pickup": (FIELD_PICKUP, "未点", {"未点", "已接", "未接"}),
     "arrival": (FIELD_ARRIVAL, "未点", {"未点", "到了", "还没有", "缺席", "KOKO"}),
-    "tuition": (FIELD_TUITION, "未点", {"未点", "去了", "迟进补习"}),
+    "tuition": (FIELD_TUITION, "未点", {"未点", "去了", "迟进补习", "今天没补习"}),
     "shower": (FIELD_SHOWER, "未点", {"未点", "冲了", "不冲凉"}),
     "meal": (FIELD_MEAL, "未点", {"未点", "吃饭了", "不吃饭"}),
     "homework": (FIELD_HOMEWORK, "未点", {"未点", "完成了", "没完成"}),

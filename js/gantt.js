@@ -54,7 +54,7 @@
   const ATTENDANCE_STEPS = [
     { key: 'pickup', label: '接生', defaultValue: '未点', options: ['未点', '已接', '未接'] },
     { key: 'arrival', label: '到校', defaultValue: '未点', options: ['未点', '到了', '还没有', '缺席', 'KOKO'] },
-    { key: 'tuition', label: '补习', defaultValue: '未点', options: ['未点', '去了', '迟进补习'] },
+    { key: 'tuition', label: '补习', defaultValue: '未点', options: ['未点', '去了', '迟进补习', '今天没补习'] },
     { key: 'shower', label: '冲凉', defaultValue: '未点', options: ['未点', '冲了', '不冲凉'] },
     { key: 'meal', label: '用餐', defaultValue: '未点', options: ['未点', '吃饭了', '不吃饭'] },
     { key: 'homework', label: '功课', defaultValue: '未点', options: ['未点', '完成了', '没完成'] },
@@ -2051,7 +2051,7 @@
     if (value === '已接' || value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
         value === '完成了' || value === 'extra复习了') return 'good';
     if (value === '回家') return 'home';
-    if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '没完成' || value === '没有复习') return 'warn';
+    if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '今天没补习' || value === '没完成' || value === '没有复习') return 'warn';
     if (value === '缺席' || value === '不冲凉' || value === '不吃饭') return 'bad';
     if (value === 'KOKO') return 'koko';
     return 'idle';

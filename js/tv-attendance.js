@@ -355,7 +355,7 @@
     if (value === '已接' || value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
       value === '完成了' || value === 'extra复习了') return 'good';
     if (value === '回家') return 'home';
-    if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '没完成' || value === '没有复习') return 'warn';
+    if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '今天没补习' || value === '没完成' || value === '没有复习') return 'warn';
     if (value === '缺席' || value === '不冲凉' || value === '不吃饭') return 'bad';
     if (value === 'KOKO') return 'koko';
     return 'idle';
