@@ -341,6 +341,18 @@
     display: grid;
     gap: 2px;
   }
+  .teacher-stats-name-button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+  .teacher-stats-name-button:hover strong {
+    color: var(--accent);
+  }
   .teacher-stats-name strong { font-size: 14px; }
   .teacher-stats-name span {
     color: var(--muted);
@@ -351,6 +363,50 @@
     color: var(--muted);
     text-align: center;
     font-size: 13px;
+  }
+  .teacher-stats-detail-modal {
+    max-width: 900px;
+  }
+  .teacher-stats-detail-wrap {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .teacher-stats-detail-table {
+    width: 100%;
+    min-width: 720px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .teacher-stats-detail-table th,
+  .teacher-stats-detail-table td {
+    padding: 10px 9px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  .teacher-stats-detail-table th {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+  .teacher-stats-detail-table tr:last-child td {
+    border-bottom: 0;
+  }
+  .teacher-stats-detail-table td:first-child {
+    white-space: normal;
+    min-width: 210px;
+  }
+  .teacher-stats-detail-table td:first-child strong,
+  .teacher-stats-detail-table td:first-child span {
+    display: block;
+  }
+  .teacher-stats-detail-table td:first-child span {
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
   }
 
   .attendance-wrapper {
@@ -1918,7 +1974,7 @@
 
 <div id="modal-root"></div>
 
-<script src="js/attendance.js?v=standalone-v24" defer></script>
+<script src="js/attendance.js?v=standalone-v25" defer></script>
 <script>
   if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

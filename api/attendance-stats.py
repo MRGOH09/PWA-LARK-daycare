@@ -5,11 +5,19 @@ import calendar
 import os
 import re
 import sys
+import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _auth import AuthError, fetch_whitelist_profiles, require_attendance_auth  # noqa: E402
 from _lark import get_env, send_json  # noqa: E402
-from _supabase import fetch_attendance_events, supabase_enabled  # noqa: E402
+from _supabase import (  # noqa: E402
+    fetch_attendance_events,
+    raise_supabase_error,
+    supabase_config,
+    supabase_enabled,
+    supabase_headers,
+    table_url,
+)
 
 
 TZ = timezone(timedelta(hours=8))
@@ -127,11 +135,75 @@ def empty_person(key, name):
         "homeworkCompleted": 0,
         "homeworkNotCompleted": 0,
         "byStep": {step: 0 for step in STEP_LABELS},
+        "details": [],
         "_students": set(),
     }
 
 
-def build_stats(events, whitelist_profiles=None):
+def fetch_attendance_record_summaries(env, start_date, end_date):
+    config = supabase_config(env)
+    if not config:
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+    resp = requests.get(
+        table_url(config, config["attendance_table"]),
+        headers=supabase_headers(config),
+        params=[
+            ("select", "date,student_record_id,student_no,student_name,year_form,block,campus,period,teacher"),
+            ("date", f"gte.{start_date}"),
+            ("date", f"lt.{end_date}"),
+            ("order", "date.desc,student_no.asc,student_name.asc"),
+        ],
+        timeout=15,
+    )
+    raise_supabase_error(resp, "fetch attendance record summaries")
+    out = {}
+    for row in resp.json() or []:
+        student_id = clean_text(row.get("student_record_id"))
+        if not student_id:
+            continue
+        date_text = clean_text(row.get("date"))
+        summary = {
+            "studentRecordId": student_id,
+            "studentNo": clean_text(row.get("student_no")),
+            "studentName": clean_text(row.get("student_name")),
+            "year": clean_text(row.get("year_form")),
+            "block": clean_text(row.get("block")),
+            "campus": clean_text(row.get("campus")),
+            "period": clean_text(row.get("period")),
+            "teacher": clean_text(row.get("teacher")),
+        }
+        if date_text:
+            out[f"{date_text}|{student_id}"] = summary
+        out.setdefault(student_id, summary)
+    return out
+
+
+def event_detail(event, student_lookup):
+    student_id = clean_text(event.get("student_record_id"))
+    date_text = clean_text(event.get("date"))
+    student = student_lookup.get(f"{date_text}|{student_id}") or student_lookup.get(student_id) or {"studentRecordId": student_id}
+    step = clean_text(event.get("step_key"))
+    return {
+        "id": clean_text(event.get("id")),
+        "date": date_text,
+        "createdAt": clean_text(event.get("created_at")),
+        "studentRecordId": student_id,
+        "studentNo": clean_text(student.get("studentNo")),
+        "studentName": clean_text(student.get("studentName")) or student_id or "未记录学生",
+        "year": clean_text(student.get("year")),
+        "block": clean_text(student.get("block")),
+        "campus": clean_text(student.get("campus")),
+        "period": clean_text(student.get("period")),
+        "teacher": clean_text(student.get("teacher")),
+        "stepKey": step,
+        "stepLabel": STEP_LABELS.get(step, step or "未记录项目"),
+        "oldValue": clean_text(event.get("old_value")),
+        "newValue": clean_text(event.get("new_value")),
+    }
+
+
+def build_stats(events, whitelist_profiles=None, student_lookup=None):
+    student_lookup = student_lookup or {}
     people = {}
     totals = {
         "totalActions": 0,
@@ -173,11 +245,13 @@ def build_stats(events, whitelist_profiles=None):
             elif new_value == "没完成":
                 person["homeworkNotCompleted"] += 1
                 totals["homeworkNotCompleted"] += 1
+        person["details"].append(event_detail(event, student_lookup))
 
     out = []
     for person in people.values():
         person["uniqueStudents"] = len(person["_students"])
         del person["_students"]
+        person["details"].sort(key=lambda item: item.get("createdAt") or "", reverse=True)
         out.append(person)
     out.sort(key=lambda item: (-item["attendanceActions"], -item["homeworkCompleted"], item["name"]))
     totals["uniqueStudents"] = len(all_students)
@@ -195,8 +269,9 @@ class handler(BaseHTTPRequestHandler):
             params = query_params(self.path)
             range_info = stats_range(params)
             events = fetch_attendance_events(env, range_info["startDate"], range_info["endDate"])
+            student_lookup = fetch_attendance_record_summaries(env, range_info["startDate"], range_info["endDate"])
             whitelist_profiles = fetch_whitelist_profiles(env)
-            totals, people = build_stats(events, whitelist_profiles)
+            totals, people = build_stats(events, whitelist_profiles, student_lookup)
             payload = {
                 "success": True,
                 **range_info,

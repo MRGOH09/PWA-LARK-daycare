@@ -870,6 +870,25 @@
       .map((key) => ({ key, label: labels[key] || key }));
   }
 
+  function teacherStatsPersonByKey(key) {
+    const people = state.teacherStats && Array.isArray(state.teacherStats.people) ? state.teacherStats.people : [];
+    return people.find((person) => String(person.key || '') === String(key || '')) || null;
+  }
+
+  function formatStatsDateTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Kuala_Lumpur',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(date);
+  }
+
   function isStatsView() {
     return state.currentView === 'stats';
   }
@@ -964,10 +983,11 @@
         <tr>
           <td>${escapeHtml(String(index + 1))}</td>
           <td>
-            <div class="teacher-stats-name">
+            <button class="teacher-stats-name teacher-stats-name-button" type="button"
+              data-teacher-stat-key="${escapeHtml(person.key || '')}">
               <strong>${escapeHtml(person.name || person.email || '未记录')}</strong>
               <span>${escapeHtml(person.email || (person.key === 'unknown' ? '旧记录没有操作者' : ''))}</span>
-            </div>
+            </button>
           </td>
           <td class="num"><strong>${escapeHtml(String(person.attendanceActions || 0))}</strong></td>
           <td class="num">${escapeHtml(String(person.uniqueStudents || 0))}</td>
@@ -994,6 +1014,67 @@
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
+    elTeacherStatsTable.querySelectorAll('[data-teacher-stat-key]').forEach((btn) => {
+      btn.addEventListener('click', () => openTeacherStatsDetailModal(btn.getAttribute('data-teacher-stat-key') || ''));
+    });
+  }
+
+  function openTeacherStatsDetailModal(key) {
+    const person = teacherStatsPersonByKey(key);
+    if (!person) return;
+    const details = Array.isArray(person.details) ? person.details : [];
+    const title = person.name || person.email || '未记录';
+    const rows = details.map((item) => {
+      const studentMeta = [
+        item.studentNo ? `NO ${item.studentNo}` : '',
+        item.year || '',
+        item.block || '',
+        item.campus || '',
+        item.period || ''
+      ].filter(Boolean).join(' · ');
+      return `<tr>
+        <td>
+          <strong>${escapeHtml(item.studentName || item.studentRecordId || '-')}</strong>
+          <span>${escapeHtml(studentMeta || '-')}</span>
+        </td>
+        <td>${escapeHtml(item.stepLabel || item.stepKey || '-')}</td>
+        <td>${escapeHtml(item.oldValue || '-')}</td>
+        <td><strong>${escapeHtml(item.newValue || '-')}</strong></td>
+        <td>${escapeHtml(formatStatsDateTime(item.createdAt))}</td>
+      </tr>`;
+    }).join('');
+    state.modalOpen = true;
+    elModalRoot.innerHTML = `<div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal wide teacher-stats-detail-modal" role="dialog" aria-modal="true">
+        <h2>${escapeHtml(title)} · 点名明细</h2>
+        <dl>
+          <dt>范围</dt><dd>${escapeHtml(teacherStatsLabel(state.teacherStats))}</dd>
+          <dt>点名次数</dt><dd>${escapeHtml(String(person.attendanceActions || 0))}</dd>
+          <dt>学生数</dt><dd>${escapeHtml(String(person.uniqueStudents || 0))}</dd>
+          <dt>总操作</dt><dd>${escapeHtml(String(person.totalActions || 0))}</dd>
+        </dl>
+        <div class="teacher-stats-detail-wrap">
+          ${details.length ? `
+            <table class="teacher-stats-detail-table">
+              <thead>
+                <tr>
+                  <th>学生</th>
+                  <th>项目</th>
+                  <th>原状态</th>
+                  <th>新状态</th>
+                  <th>时间</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          ` : '<div class="teacher-stats-empty">这个范围没有明细记录。</div>'}
+        </div>
+        <div class="actions">
+          <button id="modal-close" type="button">关闭</button>
+        </div>
+      </div>
+    </div>`;
+    bindModalCommon();
   }
 
   async function loadTeacherStats(forceRefresh = false) {
