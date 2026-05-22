@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#075e54" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="宝贝动态" />
+<title>宝贝动态</title>
+<link rel="manifest" href="parent.webmanifest" />
+<style>
+  :root {
+    --bg: #e7f0ec;
+    --panel: #ffffff;
+    --panel-2: #f6fbf8;
+    --text: #10231f;
+    --muted: #60706b;
+    --line: #cbdad5;
+    --brand: #075e54;
+    --brand-2: #128c7e;
+    --bubble: #dcf8c6;
+    --bubble-2: #ffffff;
+    --score: #f59e0b;
+    --bad: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    color: var(--text);
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+  .auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: linear-gradient(160deg, #075e54, #128c7e);
+  }
+  .auth-panel {
+    width: min(420px, 100%);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 24px;
+    text-align: center;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  }
+  .auth-panel h1 { margin: 0; font-size: 25px; }
+  .auth-panel p { margin: 10px 0 18px; color: var(--muted); line-height: 1.6; }
+  #google-signin-button { display: flex; justify-content: center; min-height: 44px; }
+  #auth-status { margin-top: 14px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+  header.top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 18px;
+    padding-top: max(14px, env(safe-area-inset-top));
+    background: var(--brand);
+    color: #fff;
+  }
+  header.top h1 { margin: 0; font-size: 20px; }
+  header.top p { margin: 3px 0 0; color: rgba(255, 255, 255, 0.75); font-size: 12px; }
+  .top-actions { display: flex; gap: 8px; align-items: center; }
+  .top-actions select,
+  .top-actions button {
+    min-height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    padding: 6px 10px;
+    font-weight: 800;
+  }
+  .top-actions select option { color: var(--text); }
+  .layout {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+  aside.children {
+    min-height: 0;
+    overflow: auto;
+    border-right: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .child-list-head {
+    padding: 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .child-list-head strong { display: block; }
+  .child-list-head span { color: var(--muted); font-size: 12px; }
+  .child-card {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    padding: 12px 14px;
+    text-align: left;
+  }
+  .child-card.active { background: var(--panel-2); }
+  .avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--brand-2);
+    color: #fff;
+    font-weight: 900;
+  }
+  .child-card strong,
+  .child-card span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .child-card span { margin-top: 3px; color: var(--muted); font-size: 12px; }
+  main.chat {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+  }
+  .chat-head {
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .chat-title strong { display: block; font-size: 17px; }
+  .chat-title span { color: var(--muted); font-size: 12px; }
+  .notify-btn {
+    min-height: 36px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--brand-2);
+    color: #fff;
+    padding: 7px 12px;
+    font-weight: 900;
+  }
+  .score-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.58);
+    border-bottom: 1px solid var(--line);
+  }
+  .score-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 9px 10px;
+  }
+  .score-card span { display: block; color: var(--muted); font-size: 11px; }
+  .score-card strong { display: block; margin-top: 2px; color: var(--score); font-size: 19px; }
+  .feed {
+    min-height: 0;
+    overflow: auto;
+    padding: 18px 16px 28px;
+    background:
+      linear-gradient(rgba(231, 240, 236, 0.92), rgba(231, 240, 236, 0.92)),
+      repeating-linear-gradient(45deg, rgba(7, 94, 84, 0.08) 0 1px, transparent 1px 16px);
+  }
+  .day-divider {
+    width: max-content;
+    max-width: 100%;
+    margin: 10px auto;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.75);
+    color: var(--muted);
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .message {
+    max-width: min(620px, 92%);
+    margin: 10px 0;
+    border-radius: 8px;
+    background: var(--bubble-2);
+    padding: 9px 10px 7px;
+    box-shadow: 0 1px 2px rgba(15, 35, 31, 0.12);
+  }
+  .message.score { background: var(--bubble); margin-left: auto; }
+  .message.negative { border-left: 4px solid var(--bad); }
+  .message-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .message-meta strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--brand);
+    font-size: 12px;
+  }
+  .message p { margin: 4px 0 0; line-height: 1.45; }
+  .message time { flex: 0 0 auto; }
+  .empty {
+    margin: 24px auto;
+    max-width: 420px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 18px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .rankings {
+    display: grid;
+    gap: 8px;
+    padding: 10px 16px 16px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+  }
+  .ranking-tabs { display: flex; gap: 8px; }
+  .ranking-tabs button {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel-2);
+    padding: 6px 10px;
+    font-weight: 800;
+  }
+  .ranking-tabs button.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+  }
+  .ranking-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 72px;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 0;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .ranking-row.own { color: var(--brand); font-weight: 900; }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    aside.children {
+      display: flex;
+      overflow-x: auto;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .child-list-head { min-width: 150px; border-bottom: 0; border-right: 1px solid var(--line); }
+    .child-card { min-width: 210px; border-bottom: 0; border-right: 1px solid var(--line); }
+    .score-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    header.top { grid-template-columns: 1fr; }
+    .top-actions { justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+<section class="auth-gate" id="auth-gate">
+  <div class="auth-panel">
+    <h1>宝贝动态</h1>
+    <p>请用爸爸或妈妈绑定的 Google 账号登录，只会显示自己孩子的点名和 Noble Star。</p>
+    <div id="google-signin-button"></div>
+    <div id="auth-status">正在检查登录状态…</div>
+  </div>
+</section>
+
+<div class="shell" id="app-shell" hidden>
+  <header class="top">
+    <div>
+      <h1>宝贝动态</h1>
+      <p id="current-user"></p>
+    </div>
+    <div class="top-actions">
+      <select id="language-select" aria-label="语言">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+      </select>
+      <button id="refresh" type="button">刷新</button>
+      <button id="sign-out" type="button">退出</button>
+    </div>
+  </header>
+  <div class="layout">
+    <aside class="children">
+      <div class="child-list-head">
+        <strong>我的孩子</strong>
+        <span id="children-meta">加载中…</span>
+      </div>
+      <div id="children-list"></div>
+    </aside>
+    <main class="chat">
+      <section class="chat-head">
+        <div class="chat-title">
+          <strong id="active-child-name">请选择孩子</strong>
+          <span id="active-child-meta">点名动态和分数会显示在这里</span>
+        </div>
+        <button class="notify-btn" id="notify-btn" type="button">开启通知</button>
+      </section>
+      <section class="score-strip" id="score-strip"></section>
+      <section class="feed" id="feed"></section>
+      <section class="rankings">
+        <div class="ranking-tabs">
+          <button type="button" data-ranking="week" class="active">本周</button>
+          <button type="button" data-ranking="month">本月</button>
+          <button type="button" data-ranking="all">永久</button>
+        </div>
+        <div id="ranking-list"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="js/parent.js?v=parent-v2"></script>
+</body>
+</html>

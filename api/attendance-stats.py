@@ -5,18 +5,15 @@ import calendar
 import os
 import re
 import sys
-import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _auth import AuthError, fetch_whitelist_profiles, require_attendance_auth  # noqa: E402
 from _lark import get_env, send_json  # noqa: E402
 from _supabase import (  # noqa: E402
     fetch_attendance_events,
-    raise_supabase_error,
+    fetch_table_rows,
     supabase_config,
     supabase_enabled,
-    supabase_headers,
-    table_url,
 )
 
 
@@ -140,24 +137,42 @@ def empty_person(key, name):
     }
 
 
+def dedupe_latest_events(events):
+    out = []
+    seen = set()
+    ordered = sorted(events or [], key=lambda item: clean_text(item.get("created_at")), reverse=True)
+    for event in ordered:
+        date_text = clean_text(event.get("date"))
+        student_id = clean_text(event.get("student_record_id"))
+        step = clean_text(event.get("step_key"))
+        if date_text and student_id and step:
+            key = (date_text, student_id, step)
+        else:
+            key = ("event", clean_text(event.get("id")) or str(len(out)))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(event)
+    return out
+
+
 def fetch_attendance_record_summaries(env, start_date, end_date):
     config = supabase_config(env)
     if not config:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
-    resp = requests.get(
-        table_url(config, config["attendance_table"]),
-        headers=supabase_headers(config),
-        params=[
+    rows = fetch_table_rows(
+        config,
+        config["attendance_table"],
+        [
             ("select", "date,student_record_id,student_no,student_name,year_form,block,campus,period,teacher"),
             ("date", f"gte.{start_date}"),
             ("date", f"lt.{end_date}"),
             ("order", "date.desc,student_no.asc,student_name.asc"),
         ],
-        timeout=15,
+        "fetch attendance record summaries",
     )
-    raise_supabase_error(resp, "fetch attendance record summaries")
     out = {}
-    for row in resp.json() or []:
+    for row in rows:
         student_id = clean_text(row.get("student_record_id"))
         if not student_id:
             continue
@@ -216,7 +231,7 @@ def build_stats(events, whitelist_profiles=None, student_lookup=None):
     }
     all_students = set()
 
-    for event in events:
+    for event in dedupe_latest_events(events):
         step = clean_text(event.get("step_key"))
         new_value = clean_text(event.get("new_value"))
         student_id = clean_text(event.get("student_record_id"))

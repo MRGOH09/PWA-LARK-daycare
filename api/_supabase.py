@@ -181,20 +181,38 @@ def post_attendance_events(config, events):
     )
 
 
+def fetch_table_rows(config, table, params, action, page_size=1000):
+    rows = []
+    offset = 0
+    while True:
+        headers = supabase_headers(config)
+        headers["Range"] = f"{offset}-{offset + page_size - 1}"
+        resp = requests.get(
+            table_url(config, table),
+            headers=headers,
+            params=params,
+            timeout=15,
+        )
+        raise_supabase_error(resp, action)
+        page = resp.json() or []
+        rows.extend(page)
+        if len(page) < page_size:
+            return rows
+        offset += page_size
+
+
 def fetch_attendance_events(env, start_date, end_date):
     config = supabase_config(env)
     if not config:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
-    resp = requests.get(
-        table_url(config, config["events_table"]),
-        headers=supabase_headers(config),
-        params=[
+    return fetch_table_rows(
+        config,
+        config["events_table"],
+        [
             ("select", "*"),
             ("date", f"gte.{start_date}"),
             ("date", f"lt.{end_date}"),
             ("order", "created_at.desc"),
         ],
-        timeout=15,
+        "fetch attendance events",
     )
-    raise_supabase_error(resp, "fetch attendance events")
-    return resp.json() or []
