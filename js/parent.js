@@ -334,6 +334,23 @@
     }).format(date);
   }
 
+  function formatClock(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat(state.language === 'en' ? 'en-MY' : 'zh-MY', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  }
+
+  function feedMessageWithContext(item, teacher, timeText) {
+    const parts = [timeText, teacher].filter(Boolean);
+    const message = item.message || '';
+    if (!parts.length) return message;
+    return `${parts.join(' · ')} · ${message}`;
+  }
+
   function renderFeed() {
     if (!state.feed.length) {
       elFeed.innerHTML = `<div class="empty">${escapeHtml(t('暂时还没有动态。', 'No updates yet.'))}</div>`;
@@ -350,13 +367,15 @@
       const negative = item.type === 'score' && Number(item.points || 0) < 0;
       const teacher = item.teacher || t('老师', 'Teacher');
       const timeText = formatTime(item.createdAt);
+      const clockText = formatClock(item.createdAt);
+      const message = feedMessageWithContext(item, teacher, clockText);
       html.push(`
         <article class="message ${item.type === 'score' ? 'score' : ''} ${negative ? 'negative' : ''}">
           <div class="message-meta">
             <strong>${escapeHtml(teacher)}</strong>
             ${timeText ? `<time>${escapeHtml(timeText)}</time>` : ''}
           </div>
-          <p>${escapeHtml(item.message || '')}</p>
+          <p>${escapeHtml(message)}</p>
         </article>
       `);
     });
