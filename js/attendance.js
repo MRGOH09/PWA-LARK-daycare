@@ -104,6 +104,7 @@
   const elUnfinishedToggle = $('#attendance-unfinished-toggle');
   const elUnfinishedMeta = $('#attendance-unfinished-meta');
   const elRefresh = $('#refresh');
+  const elVersionUpdate = $('#version-update');
   const elViewAttendance = $('#view-attendance');
   const elViewStats = $('#view-stats');
   const elViewSettings = $('#view-settings');
@@ -1738,6 +1739,29 @@
     }
   }
 
+  async function updateAppVersion(button) {
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = '更新中…';
+    }
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) =>
+          registration.update().catch(() => {})
+        ));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    } finally {
+      if (button) button.textContent = originalText || '版本更新';
+      window.location.reload();
+    }
+  }
+
   function startAutoRefresh() {
     stopAutoRefresh();
     state.refreshTimer = setInterval(() => {
@@ -1766,6 +1790,7 @@
       }
     }
     if (elRefresh) elRefresh.addEventListener('click', refreshCurrentView);
+    if (elVersionUpdate) elVersionUpdate.addEventListener('click', () => updateAppVersion(elVersionUpdate));
     if (elMobileRefresh) elMobileRefresh.addEventListener('click', refreshCurrentView);
     if (elViewAttendance) {
       elViewAttendance.addEventListener('click', () => switchView('attendance'));

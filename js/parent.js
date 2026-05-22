@@ -32,6 +32,7 @@
   const elRankingList = $('#ranking-list');
   const elLanguage = $('#language-select');
   const elRefresh = $('#refresh');
+  const elVersionUpdate = $('#version-update');
   const elSignOut = $('#sign-out');
   const elNotify = $('#notify-btn');
 
@@ -277,6 +278,29 @@
     }
   }
 
+  async function updateAppVersion(button) {
+    const originalText = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = t('更新中…', 'Updating...');
+    }
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) =>
+          registration.update().catch(() => {})
+        ));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    } finally {
+      if (button) button.textContent = originalText || t('版本更新', 'Update app');
+      window.location.reload();
+    }
+  }
+
   function fmtPoints(value) {
     const num = Number(value || 0);
     return Number.isInteger(num) ? String(num) : num.toFixed(1);
@@ -394,6 +418,7 @@
 
   function bindEvents() {
     if (elRefresh) elRefresh.addEventListener('click', loadChildData);
+    if (elVersionUpdate) elVersionUpdate.addEventListener('click', () => updateAppVersion(elVersionUpdate));
     if (elSignOut) {
       elSignOut.addEventListener('click', () => {
         saveToken('');
