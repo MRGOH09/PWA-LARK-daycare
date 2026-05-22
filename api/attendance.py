@@ -217,9 +217,11 @@ def apply_event_overrides(records, events):
         key = clean_text(record.get("studentRecordId"))
         if key:
             by_student[key] = record
+        record.setdefault("stepMeta", {})
     seen = set()
     valid_steps = set(STATUS_SPECS.keys()) | {"note"}
-    for event in events:
+    ordered = sorted(events, key=lambda item: clean_text(item.get("created_at")), reverse=True)
+    for event in ordered:
         student_id = clean_text(event.get("student_record_id"))
         step = clean_text(event.get("step_key"))
         key = (student_id, step)
@@ -229,6 +231,10 @@ def apply_event_overrides(records, events):
         record = by_student.get(student_id)
         if record is not None:
             record[step] = clean_text(event.get("new_value"))
+            record.setdefault("stepMeta", {})[step] = {
+                "teacher": clean_text(event.get("actor_name")) or clean_text(event.get("actor_email")),
+                "createdAt": clean_text(event.get("created_at")),
+            }
     return records
 
 
@@ -479,7 +485,8 @@ class handler(BaseHTTPRequestHandler):
                 duplicate_count = 1 if existing_row else 0
                 sync_warnings = []
                 try:
-                    insert_attendance_events(env, attendance_events_from_change(existing_record, intended_record, actor))
+                    inserted_events = insert_attendance_events(env, attendance_events_from_change(existing_record, intended_record, actor))
+                    intended_record = apply_event_overrides([intended_record], inserted_events)[0]
                 except Exception as exc:
                     sync_warnings.append(f"Supabase event log failed: {exc}")
 

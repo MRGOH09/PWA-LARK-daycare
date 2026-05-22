@@ -280,7 +280,7 @@
     return ATTENDANCE_STEPS.reduce((out, step) => {
       out[step.key] = step.defaultValue;
       return out;
-    }, { note: '', updatedAt: '' });
+    }, { note: '', updatedAt: '', stepMeta: {} });
   }
 
   function attendanceRecordFor(rec) {
@@ -484,8 +484,33 @@
     });
   }
 
+  function currentActorName() {
+    const user = state.auth.user || {};
+    return user.name || user.email || '';
+  }
+
+  function patchStepMeta(patch) {
+    const changed = ATTENDANCE_STEPS
+      .map((step) => step.key)
+      .filter((key) => Object.prototype.hasOwnProperty.call(patch, key));
+    if (!changed.length && !Object.prototype.hasOwnProperty.call(patch, 'note')) return {};
+    const now = new Date().toISOString();
+    const teacher = currentActorName();
+    const meta = {};
+    changed.forEach((key) => {
+      meta[key] = { teacher, createdAt: now };
+    });
+    if (Object.prototype.hasOwnProperty.call(patch, 'note')) {
+      meta.note = { teacher, createdAt: now };
+    }
+    return meta;
+  }
+
   function updateAttendanceByKey(key, patch, options = {}) {
-    state.attendance[key] = Object.assign(defaultAttendanceRecord(), state.attendance[key] || {}, patch, {
+    const existing = Object.assign(defaultAttendanceRecord(), state.attendance[key] || {});
+    const stepMeta = Object.assign({}, existing.stepMeta || {}, patchStepMeta(patch));
+    state.attendance[key] = Object.assign(existing, patch, {
+      stepMeta,
       updatedAt: new Date().toISOString()
     });
     saveAttendanceCache();
@@ -567,7 +592,11 @@
       const record = data.record || {};
       const returnedKey = attendanceKeyFromRecord(record);
       if (returnedKey && (!state.attendance[key] || state.attendance[key].updatedAt === sentUpdatedAt)) {
-        state.attendance[returnedKey] = Object.assign(defaultAttendanceRecord(), record);
+        const localMeta = (state.attendance[key] && state.attendance[key].stepMeta) || {};
+        const remoteMeta = record.stepMeta || {};
+        state.attendance[returnedKey] = Object.assign(defaultAttendanceRecord(), record, {
+          stepMeta: Object.assign({}, localMeta, remoteMeta)
+        });
         updateAttendanceDomForStudent(rec);
       }
       state.attendanceSyncText = `${data.action === 'created' ? '已新增' : '已更新'} ${data.source === 'supabase' ? 'Supabase' : 'Lark'}`;
@@ -1583,6 +1612,12 @@
     if (!rec) return;
     const record = attendanceRecordFor(rec);
     const name = studentValue(rec, STUDENT_FIELDS.name) || '-';
+    const stepMetaText = (stepKey) => {
+      const meta = (record.stepMeta || {})[stepKey] || {};
+      const teacher = meta.teacher || '';
+      const time = formatStatsDateTime(meta.createdAt || '');
+      return [teacher, time].filter(Boolean).join(' · ') || '-';
+    };
     state.modalOpen = true;
     elModalRoot.innerHTML = `<div class="modal-backdrop" id="modal-backdrop">
       <div class="modal wide" role="dialog" aria-modal="true">
@@ -1600,6 +1635,7 @@
           ${ATTENDANCE_STEPS.map((step) => `
             <div class="tag-field">
               <div class="tag-field-title">${escapeHtml(step.label)}</div>
+              <div class="tag-field-meta">${escapeHtml(stepMetaText(step.key))}</div>
               <div class="attendance-options">
                 ${step.options.map((option) => {
                   const active = record[step.key] === option;
