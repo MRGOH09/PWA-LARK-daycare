@@ -1172,9 +1172,18 @@
     updateAttendanceForStudent(rec, attendancePatchForStep(step, value));
   }
 
+  function primaryAttendanceValue(rec, step) {
+    if (!step) return '';
+    if (step.key === 'home') {
+      return attendanceTimeSegment(rec) === '早上' ? '去学校' : '回家';
+    }
+    return PRIMARY_STEP_VALUES[step.key] || step.options[1] || step.defaultValue;
+  }
+
   function setPrimaryAttendanceStep(studentId, stepKey) {
+    const rec = attendanceStudentById(studentId);
     const step = ATTENDANCE_STEPS.find((item) => item.key === stepKey);
-    const value = step ? PRIMARY_STEP_VALUES[step.key] : '';
+    const value = primaryAttendanceValue(rec, step);
     if (!value) return;
     setAttendanceStepValue(studentId, stepKey, value);
   }
@@ -1187,7 +1196,7 @@
     const value = record[step.key] || step.defaultValue;
     const disabled = isAttendanceFollowupDisabled(step, record);
     const label = disabled && value === step.defaultValue ? '不用点' : value;
-    const primary = PRIMARY_STEP_VALUES[step.key] || step.options[1] || step.defaultValue;
+    const primary = primaryAttendanceValue(rec, step);
     const attrs = disabled
       ? 'disabled aria-disabled="true" title="学生缺席后不需要继续点后续流程"'
       : `data-att-primary-student="${escapeHtml(attendanceStudentId(rec))}" data-att-step="${escapeHtml(step.key)}" title="短按：${escapeHtml(primary)}；长按：其他选择" aria-label="${escapeHtml(step.label)}：${escapeHtml(label)}，短按设为${escapeHtml(primary)}，长按选择其他状态"`;
@@ -1272,7 +1281,7 @@
     const value = record[step.key] || step.defaultValue;
     const disabled = isAttendanceFollowupDisabled(step, record);
     const label = disabled && value === step.defaultValue ? '不用点' : value;
-    const primary = PRIMARY_STEP_VALUES[step.key] || step.options[1] || step.defaultValue;
+    const primary = primaryAttendanceValue(rec, step);
     btn.className = `attendance-status-pill ${attendanceTone(value)} ${disabled ? 'disabled' : ''}`;
     btn.textContent = label;
     btn.disabled = disabled;
