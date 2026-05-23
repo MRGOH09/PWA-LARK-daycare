@@ -23,7 +23,7 @@
     { key: 'meal', label: '用餐', defaultValue: '未点', options: ['未点', '吃饭了', '不吃饭'] },
     { key: 'homework', label: '功课', defaultValue: '未点', options: ['未点', '完成了', '没完成'] },
     { key: 'extra', label: '复习', defaultValue: '未点', options: ['未点', 'extra复习了', '没有复习'] },
-    { key: 'home', label: '回家', defaultValue: '未回家', options: ['未回家', '回家'] }
+    { key: 'home', label: '回家/去学校', defaultValue: '未点', options: ['未点', '回家', '去学校'] }
   ];
   const FIXED_YEAR_ORDER = ['PA', 'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'F1', 'F2', 'F3', 'F4', 'F5'];
   const MAIN_API_ORIGIN = 'https://pwa-lark-daycare.vercel.app';
@@ -635,7 +635,7 @@
     if (value === '未点' || value === '未回家') return 'idle';
     if (value === '已接' || value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
         value === '完成了' || value === 'extra复习了') return 'good';
-    if (value === '回家') return 'home';
+    if (value === '回家' || value === '去学校') return 'home';
     if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '今天没补习' || value === '没完成' || value === '没有复习') return 'warn';
     if (value === '缺席' || value === '不冲凉' || value === '不吃饭') return 'bad';
     if (value === 'KOKO') return 'koko';
@@ -724,7 +724,7 @@
       { label: '还没有/缺席', value: count((rec) => rec.arrival === '还没有' || rec.arrival === '缺席'), cls: 'warning' },
       { label: 'KOKO', value: count((rec) => rec.arrival === 'KOKO') },
       { label: '已补习', value: count((rec) => rec.tuition === '去了' || rec.tuition === '迟进补习'), cls: 'normal' },
-      { label: '已回家', value: count((rec) => rec.home === '回家'), cls: 'normal' },
+      { label: '回家/去学校', value: count((rec) => rec.home === '回家' || rec.home === '去学校'), cls: 'normal' },
       { label: '功课没完成', value: count((rec) => rec.homework === '没完成'), cls: 'warning' }
     ];
     elAttendanceSummary.innerHTML = cards.map((c) => `

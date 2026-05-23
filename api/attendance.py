@@ -58,7 +58,7 @@ STATUS_SPECS = {
     "meal": (FIELD_MEAL, "未点", {"未点", "吃饭了", "不吃饭"}),
     "homework": (FIELD_HOMEWORK, "未点", {"未点", "完成了", "没完成"}),
     "extra": (FIELD_EXTRA, "未点", {"未点", "extra复习了", "没有复习"}),
-    "home": (FIELD_HOME, "未回家", {"未回家", "回家"}),
+    "home": (FIELD_HOME, "未点", {"未点", "未回家", "回家", "去学校"}),
 }
 
 WEEKDAYS = {"MON", "TUE", "WED", "THUR", "FRI"}
@@ -174,7 +174,7 @@ def normalized_attendance_record(item):
         "meal": extract_text(fields.get(FIELD_MEAL)) or "未点",
         "homework": extract_text(fields.get(FIELD_HOMEWORK)) or "未点",
         "extra": extract_text(fields.get(FIELD_EXTRA)) or "未点",
-        "home": extract_text(fields.get(FIELD_HOME)) or "未回家",
+        "home": extract_text(fields.get(FIELD_HOME)) or "未点",
         "note": extract_text(fields.get(FIELD_NOTE)),
         "updatedAt": datetime_value_to_text(fields.get(FIELD_UPDATED_AT)),
     }
@@ -201,7 +201,7 @@ def normalized_supabase_record(row):
         "meal": clean_text(row.get("meal")) or "未点",
         "homework": clean_text(row.get("homework")) or "未点",
         "extra": clean_text(row.get("extra")) or "未点",
-        "home": clean_text(row.get("home")) or "未回家",
+        "home": clean_text(row.get("home")) or "未点",
         "note": clean_text(row.get("note")),
         "updatedAt": clean_text(row.get("updated_at")),
         "updatedByEmail": clean_text(row.get("updated_by_email")),

@@ -14,7 +14,7 @@
     { key: 'meal', label: '餐', full: '用餐', defaultValue: '未点' },
     { key: 'homework', label: '功', full: '功课', defaultValue: '未点' },
     { key: 'extra', label: '复', full: '复习', defaultValue: '未点' },
-    { key: 'home', label: '回', full: '回家', defaultValue: '未回家' }
+    { key: 'home', label: '回', full: '回家/去学校', defaultValue: '未点' }
   ];
   var GROUPS = [
     { key: 'arrived', label: '已到', match: '到了' },
@@ -275,7 +275,7 @@
       meal: '未点',
       homework: '未点',
       extra: '未点',
-      home: '未回家',
+      home: '未点',
       updatedAt: ''
     };
   }
@@ -354,7 +354,7 @@
     if (value === '未点' || value === '未回家') return 'idle';
     if (value === '已接' || value === '到了' || value === '去了' || value === '冲了' || value === '吃饭了' ||
       value === '完成了' || value === 'extra复习了') return 'good';
-    if (value === '回家') return 'home';
+    if (value === '回家' || value === '去学校') return 'home';
     if (value === '未接' || value === '还没有' || value === '迟进补习' || value === '今天没补习' || value === '没完成' || value === '没有复习') return 'warn';
     if (value === '缺席' || value === '不冲凉' || value === '不吃饭') return 'bad';
     if (value === 'KOKO') return 'koko';

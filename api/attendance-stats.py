@@ -26,7 +26,7 @@ STEP_LABELS = {
     "meal": "用餐",
     "homework": "功课",
     "extra": "复习",
-    "home": "回家",
+    "home": "回家/去学校",
     "note": "备注",
 }
 
