@@ -313,16 +313,6 @@
     text-align: right;
   }
 
-  .size-slider {
-    width: min(16vw, 180px);
-    min-width: 110px;
-    height: 34px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    accent-color: #0f172a;
-  }
-
   .size-button {
     min-width: 40px;
     min-height: 34px;
@@ -338,6 +328,24 @@
   .size-button.active {
     background: #0f172a;
     color: #ffffff;
+  }
+
+  .scale-button {
+    min-width: 46px;
+    min-height: 38px;
+    border: 0;
+    border-radius: 12px;
+    background: #e2e8f0;
+    color: #0f172a;
+    padding: 0 12px;
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 1000;
+  }
+
+  .scale-button:active {
+    transform: translateY(1px);
+    background: #cbd5e1;
   }
 
   .teacher-strip {
@@ -622,7 +630,6 @@
     .board-actions button,
     .size-control { flex: 1; }
     .size-control { justify-content: center; }
-    .size-slider { width: min(30vw, 180px); }
     .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .student-stage { overflow: visible; }
     .page-grid { height: auto; grid-template-columns: 1fr; }
@@ -679,8 +686,9 @@
           <button class="size-button" type="button" data-size="standard">中</button>
           <button class="size-button" type="button" data-size="large">大</button>
           <button class="size-button" type="button" data-size="xlarge">超</button>
-          <input id="size-slider" class="size-slider" type="range" min="80" max="140" step="5" value="100" aria-label="手动显示大小" />
+          <button id="size-minus" class="scale-button" type="button" aria-label="缩小显示">-</button>
           <span id="size-value" class="size-value">100%</span>
+          <button id="size-plus" class="scale-button" type="button" aria-label="放大显示">+</button>
         </div>
         <button id="change-class" class="ghost-button" type="button">更换班级</button>
         <button id="logout-pin" class="ghost-button" type="button">退出</button>
@@ -704,6 +712,6 @@
     </footer>
   </main>
 
-  <script src="js/tv-attendance.js?v=tv-v6" defer></script>
+  <script src="js/tv-attendance.js?v=tv-v7" defer></script>
 </body>
 </html>

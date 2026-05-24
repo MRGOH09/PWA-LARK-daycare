@@ -70,8 +70,9 @@
   var elChangeClass = $('#change-class');
   var elLogoutPin = $('#logout-pin');
   var elSizeButtons = document.querySelectorAll('[data-size]');
-  var elSizeSlider = $('#size-slider');
   var elSizeValue = $('#size-value');
+  var elSizeMinus = $('#size-minus');
+  var elSizePlus = $('#size-plus');
 
   function $(selector) {
     return document.querySelector(selector);
@@ -161,10 +162,16 @@
       elSizeButtons[i].classList.toggle('active', isActive);
       elSizeButtons[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
     }
-    if (elSizeSlider) elSizeSlider.value = String(nextScale);
     if (elSizeValue) elSizeValue.textContent = nextScale + '%';
+    if (elSizeMinus) elSizeMinus.disabled = nextScale <= 80;
+    if (elSizePlus) elSizePlus.disabled = nextScale >= 140;
     storageSet(DISPLAY_SIZE_KEY, nextSize);
     storageSet(DISPLAY_SCALE_KEY, String(nextScale));
+  }
+
+  function nudgeDisplayScale(delta) {
+    applyDisplayScale(state.displayScale + delta);
+    resizeBoard();
   }
 
   function resizeBoard() {
@@ -715,12 +722,8 @@
       });
     }
 
-    if (elSizeSlider) {
-      elSizeSlider.addEventListener('input', function () {
-        applyDisplayScale(this.value);
-        resizeBoard();
-      });
-    }
+    if (elSizeMinus) elSizeMinus.addEventListener('click', function () { nudgeDisplayScale(-5); });
+    if (elSizePlus) elSizePlus.addEventListener('click', function () { nudgeDisplayScale(5); });
 
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden && !elBoardScreen.classList.contains('hidden')) loadData();
