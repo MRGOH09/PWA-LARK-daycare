@@ -6,12 +6,13 @@
   var PIN_KEY = 'tv-attendance-pin-v1';
   var SCOPE_KEY = 'tv-attendance-scope-v1';
   var DISPLAY_SIZE_KEY = 'tv-attendance-display-size-v1';
+  var DISPLAY_SCALE_KEY = 'tv-attendance-display-scale-v1';
   var STUDENT_FIELDS = ['arrival', 'tuition', 'shower', 'meal', 'homework', 'extra', 'home'];
   var DISPLAY_SIZES = {
-    small: { pageCardWidth: 236, pageCardHeight: 150, pageReservedHeight: 310, minPageSize: 8, maxPageSize: 32 },
-    standard: { pageCardWidth: 280, pageCardHeight: 178, pageReservedHeight: 360, minPageSize: 6, maxPageSize: 24 },
-    large: { pageCardWidth: 324, pageCardHeight: 210, pageReservedHeight: 410, minPageSize: 4, maxPageSize: 18 },
-    xlarge: { pageCardWidth: 370, pageCardHeight: 250, pageReservedHeight: 470, minPageSize: 3, maxPageSize: 14 }
+    small: { scale: 85, pageCardWidth: 236, pageCardHeight: 150, pageReservedHeight: 310, minPageSize: 8, maxPageSize: 32 },
+    standard: { scale: 100, pageCardWidth: 280, pageCardHeight: 178, pageReservedHeight: 360, minPageSize: 6, maxPageSize: 24 },
+    large: { scale: 115, pageCardWidth: 324, pageCardHeight: 210, pageReservedHeight: 410, minPageSize: 4, maxPageSize: 18 },
+    xlarge: { scale: 130, pageCardWidth: 370, pageCardHeight: 250, pageReservedHeight: 470, minPageSize: 3, maxPageSize: 14 }
   };
   var FLOW_STEPS = [
     { key: 'arrival', label: '到', full: '到了补习中心', defaultValue: '未点' },
@@ -44,7 +45,8 @@
     rotateTimer: null,
     lastHash: '',
     loading: false,
-    displaySize: 'standard'
+    displaySize: 'standard',
+    displayScale: 100
   };
 
   var elPinScreen = $('#pin-screen');
@@ -68,6 +70,8 @@
   var elChangeClass = $('#change-class');
   var elLogoutPin = $('#logout-pin');
   var elSizeButtons = document.querySelectorAll('[data-size]');
+  var elSizeSlider = $('#size-slider');
+  var elSizeValue = $('#size-value');
 
   function $(selector) {
     return document.querySelector(selector);
@@ -125,17 +129,42 @@
     return DISPLAY_SIZES[value] ? value : 'standard';
   }
 
+  function clampDisplayScale(value) {
+    var num = Number(value);
+    if (!Number.isFinite(num)) num = 100;
+    return Math.max(80, Math.min(140, Math.round(num / 5) * 5));
+  }
+
+  function displaySizeForScale(scale) {
+    if (scale <= 90) return 'small';
+    if (scale >= 125) return 'xlarge';
+    if (scale >= 108) return 'large';
+    return 'standard';
+  }
+
   function applyDisplaySize(size) {
     var nextSize = normalizeDisplaySize(size);
+    applyDisplayScale(DISPLAY_SIZES[nextSize].scale, nextSize);
+  }
+
+  function applyDisplayScale(scale, preferredSize) {
+    var nextScale = clampDisplayScale(scale);
+    var nextSize = preferredSize ? normalizeDisplaySize(preferredSize) : displaySizeForScale(nextScale);
     state.displaySize = nextSize;
+    state.displayScale = nextScale;
     document.body.classList.remove('tv-size-small', 'tv-size-standard', 'tv-size-large', 'tv-size-xlarge');
-    document.body.classList.add('tv-size-' + nextSize);
+    document.body.classList.add('tv-size-standard');
+    document.documentElement.style.setProperty('--manual-scale', String(nextScale / 100));
+    document.body.style.zoom = String(nextScale / 100);
     for (var i = 0; i < elSizeButtons.length; i += 1) {
       var isActive = elSizeButtons[i].getAttribute('data-size') === nextSize;
       elSizeButtons[i].classList.toggle('active', isActive);
       elSizeButtons[i].setAttribute('aria-pressed', isActive ? 'true' : 'false');
     }
+    if (elSizeSlider) elSizeSlider.value = String(nextScale);
+    if (elSizeValue) elSizeValue.textContent = nextScale + '%';
     storageSet(DISPLAY_SIZE_KEY, nextSize);
+    storageSet(DISPLAY_SCALE_KEY, String(nextScale));
   }
 
   function resizeBoard() {
@@ -397,9 +426,10 @@
   function calcPageSize() {
     var width = window.innerWidth || 1280;
     var height = window.innerHeight || 720;
-    var config = DISPLAY_SIZES[state.displaySize] || DISPLAY_SIZES.standard;
-    var cols = Math.max(1, Math.floor((width - 80) / config.pageCardWidth));
-    var rows = Math.max(1, Math.floor((height - config.pageReservedHeight) / config.pageCardHeight));
+    var config = DISPLAY_SIZES.standard;
+    var scale = state.displayScale / 100;
+    var cols = Math.max(1, Math.floor((width - 80) / (config.pageCardWidth * scale)));
+    var rows = Math.max(1, Math.floor((height - config.pageReservedHeight * scale) / (config.pageCardHeight * scale)));
     return Math.max(config.minPageSize, Math.min(config.maxPageSize, cols * rows));
   }
 
@@ -685,6 +715,13 @@
       });
     }
 
+    if (elSizeSlider) {
+      elSizeSlider.addEventListener('input', function () {
+        applyDisplayScale(this.value);
+        resizeBoard();
+      });
+    }
+
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden && !elBoardScreen.classList.contains('hidden')) loadData();
     });
@@ -695,7 +732,12 @@
   }
 
   function init() {
-    applyDisplaySize(storageGet(DISPLAY_SIZE_KEY));
+    var savedScale = storageGet(DISPLAY_SCALE_KEY);
+    if (savedScale) {
+      applyDisplayScale(savedScale, storageGet(DISPLAY_SIZE_KEY));
+    } else {
+      applyDisplaySize(storageGet(DISPLAY_SIZE_KEY));
+    }
     bindEvents();
     var savedPin = storageGet(PIN_KEY);
     if (savedPin) {

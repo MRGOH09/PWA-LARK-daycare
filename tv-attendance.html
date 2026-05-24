@@ -40,6 +40,7 @@
     --chip-min-height: 36px;
     --chip-size: clamp(13px, 1vw, 17px);
     --footer-size: clamp(14px, 1.2vw, 18px);
+    --manual-scale: 1;
   }
 
   body.tv-size-small {
@@ -298,11 +299,28 @@
     padding: 5px 6px 5px 12px;
   }
 
-  .size-control span {
+  .size-label,
+  .size-value {
     color: var(--muted);
     font-size: 15px;
     font-weight: 1000;
     white-space: nowrap;
+  }
+
+  .size-value {
+    min-width: 44px;
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .size-slider {
+    width: min(16vw, 180px);
+    min-width: 110px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    accent-color: #0f172a;
   }
 
   .size-button {
@@ -432,6 +450,7 @@
     background: #ffffff;
     padding: var(--student-pad);
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+    transform-origin: top left;
   }
 
   .student-card.arrived { border-color: rgba(34, 197, 94, 0.45); }
@@ -603,6 +622,7 @@
     .board-actions button,
     .size-control { flex: 1; }
     .size-control { justify-content: center; }
+    .size-slider { width: min(30vw, 180px); }
     .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .student-stage { overflow: visible; }
     .page-grid { height: auto; grid-template-columns: 1fr; }
@@ -654,11 +674,13 @@
       </div>
       <div class="board-actions">
         <div class="size-control" aria-label="显示大小">
-          <span>显示</span>
+          <span class="size-label">显示</span>
           <button class="size-button" type="button" data-size="small">小</button>
           <button class="size-button" type="button" data-size="standard">中</button>
           <button class="size-button" type="button" data-size="large">大</button>
           <button class="size-button" type="button" data-size="xlarge">超</button>
+          <input id="size-slider" class="size-slider" type="range" min="80" max="140" step="5" value="100" aria-label="手动显示大小" />
+          <span id="size-value" class="size-value">100%</span>
         </div>
         <button id="change-class" class="ghost-button" type="button">更换班级</button>
         <button id="logout-pin" class="ghost-button" type="button">退出</button>
@@ -682,6 +704,6 @@
     </footer>
   </main>
 
-  <script src="js/tv-attendance.js?v=tv-v5" defer></script>
+  <script src="js/tv-attendance.js?v=tv-v6" defer></script>
 </body>
 </html>
