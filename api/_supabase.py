@@ -6,6 +6,7 @@ import requests
 
 DEFAULT_ATTENDANCE_TABLE = "attendance_records"
 DEFAULT_ATTENDANCE_EVENTS_TABLE = "attendance_events"
+DEFAULT_SCORE_EVENTS_TABLE = "score_events"
 
 
 def supabase_config(env=None):
@@ -30,6 +31,11 @@ def supabase_config(env=None):
             env.get("SUPABASE_ATTENDANCE_EVENTS_TABLE")
             or os.environ.get("SUPABASE_ATTENDANCE_EVENTS_TABLE")
             or DEFAULT_ATTENDANCE_EVENTS_TABLE
+        ).strip(),
+        "score_events_table": (
+            env.get("SUPABASE_SCORE_EVENTS_TABLE")
+            or os.environ.get("SUPABASE_SCORE_EVENTS_TABLE")
+            or DEFAULT_SCORE_EVENTS_TABLE
         ).strip(),
     }
 
@@ -145,4 +151,25 @@ def insert_attendance_events(env, events):
         timeout=15,
     )
     raise_supabase_error(resp, "insert attendance events")
+    return resp.json() or []
+
+
+def fetch_score_events(env, start_date=None, limit=10000):
+    config = supabase_config(env)
+    if not config:
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+    params = {
+        "select": "*",
+        "order": "created_at.desc",
+        "limit": str(limit),
+    }
+    if start_date:
+        params["date"] = f"gte.{start_date}"
+    resp = requests.get(
+        table_url(config, config["score_events_table"]),
+        headers=supabase_headers(config),
+        params=params,
+        timeout=15,
+    )
+    raise_supabase_error(resp, "fetch score events")
     return resp.json() or []

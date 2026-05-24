@@ -229,7 +229,7 @@
       try {
         data = JSON.parse(text);
       } catch (err) {
-        throw new Error('返回非 JSON 数据');
+        throw new Error('服务器返回非 JSON 数据（HTTP ' + resp.status + '）');
       }
       if (!resp.ok || !data.success) throw new Error(data.error || '读取失败');
 
