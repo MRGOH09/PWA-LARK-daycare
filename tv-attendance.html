@@ -332,10 +332,54 @@
   .points {
     flex: 0 0 auto;
     border-radius: 999px;
+    background: #e2e8f0;
+    color: #475569;
+    padding: 7px 12px;
+    font-size: clamp(16px, 1.35vw, 22px);
+    font-weight: 1000;
+    white-space: nowrap;
+  }
+
+  .score-stack {
+    flex: 0 0 auto;
+    display: grid;
+    justify-items: end;
+    gap: 6px;
+  }
+
+  .points span {
+    margin-right: 4px;
+    font-size: 0.72em;
+    opacity: 0.82;
+  }
+
+  .points.earned {
     background: #fff7ed;
     color: #b45309;
-    padding: 7px 11px;
-    font-size: clamp(16px, 1.35vw, 22px);
+  }
+
+  .points.gold {
+    background: #fef3c7;
+    color: #92400e;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.13);
+  }
+
+  .points.boost {
+    background: linear-gradient(90deg, #f59e0b, #22c55e);
+    color: #ffffff;
+    box-shadow: 0 8px 24px rgba(245, 158, 11, 0.26);
+  }
+
+  .tier-pill {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: 999px;
+    background: #eef6ff;
+    color: #075985;
+    padding: 5px 9px;
+    font-size: clamp(12px, 1vw, 16px);
     font-weight: 1000;
   }
 
@@ -503,6 +547,6 @@
     </footer>
   </main>
 
-  <script src="js/tv-attendance.js?v=tv-v3" defer></script>
+  <script src="js/tv-attendance.js?v=tv-v4" defer></script>
 </body>
 </html>

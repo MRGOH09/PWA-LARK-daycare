@@ -287,6 +287,7 @@
   function mergeRecords() {
     var attendance = {};
     var records = state.data && state.data.attendance ? state.data.attendance : [];
+    var scores = state.data && state.data.scoresByStudentRecordId ? state.data.scoresByStudentRecordId : {};
     for (var i = 0; i < records.length; i += 1) {
       var key = attendanceKey(records[i]);
       if (key) attendance[key] = records[i];
@@ -296,7 +297,8 @@
       var record = attendance[student.recordId] || attendance[student.no] || attendance[student.name] || {};
       var merged = {
         student: student,
-        attendance: Object.assign(defaultAttendance(), record)
+        attendance: Object.assign(defaultAttendance(), record),
+        score: scores[student.recordId] || null
       };
       for (var j = 0; j < STUDENT_FIELDS.length; j += 1) {
         var field = STUDENT_FIELDS[j];
@@ -457,6 +459,30 @@
     elTeacherList.textContent = teachers.length ? teachers.join('、') : '-';
   }
 
+  function fmtPoints(value) {
+    var num = Number(value || 0);
+    return Number.isInteger(num) ? String(num) : num.toFixed(1);
+  }
+
+  function scoreTone(points) {
+    if (points >= 5) return 'boost';
+    if (points >= 2.5) return 'gold';
+    if (points > 0) return 'earned';
+    return 'zero';
+  }
+
+  function renderScoreBadge(score) {
+    var today = score ? Number(score.todayEarnedPoints || 0) : 0;
+    var tier = score && score.tier ? score.tier : null;
+    var tierName = tier && tier.displayName ? tier.displayName : '新星 III';
+    return '<div class="score-stack">' +
+      '<div class="points ' + scoreTone(today) + '">' +
+        '<span>今日</span><strong>' + escapeHtml(today > 0 ? '+' + fmtPoints(today) : '0') + '</strong>' +
+      '</div>' +
+      '<div class="tier-pill">' + escapeHtml(tierName) + '</div>' +
+    '</div>';
+  }
+
   function renderStudentCard(item) {
     var student = item.student;
     var record = item.attendance;
@@ -469,7 +495,7 @@
     return '<article class="student-card ' + escapeHtml(gkey) + '">' +
       '<div class="student-main">' +
         '<div class="student-name">' + escapeHtml(student.name || '-') + '</div>' +
-        '<div class="points">⭐ 0</div>' +
+        renderScoreBadge(item.score) +
       '</div>' +
       '<div class="status-line"><span class="status-dot"></span><span>' + escapeHtml(statusText(item)) + '</span></div>' +
       '<div class="flow-chips">' + chips + '</div>' +

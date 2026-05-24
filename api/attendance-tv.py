@@ -14,8 +14,10 @@ from _lark import (  # noqa: E402
     normalize_generic_record,
     send_json,
 )
+from _noble_star import score_points, score_sum, tier_payload  # noqa: E402
 from _supabase import (  # noqa: E402
     fetch_attendance_rows as fetch_supabase_attendance_rows,
+    fetch_score_events,
     supabase_enabled,
 )
 from attendance import (  # noqa: E402
@@ -57,6 +59,10 @@ def parse_date(value):
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", text):
         raise RuntimeError("日期格式必须是 YYYY-MM-DD")
     return text
+
+
+def month_start(date_text):
+    return f"{date_text[:7]}-01"
 
 
 def expected_pin():
@@ -144,6 +150,45 @@ def value_options(records, key):
     return sorted(out, key=lambda item: item.lower())
 
 
+def empty_score_summary():
+    return {
+        "todayEarnedPoints": 0,
+        "todayNetPoints": 0,
+        "monthPoints": 0,
+        "tier": tier_payload(0),
+    }
+
+
+def score_summary(rows, date_text):
+    today_rows = [row for row in rows if clean_text(row.get("date")) == date_text]
+    positive_today = [row for row in today_rows if score_points(row) > 0]
+    month_points = score_sum(rows)
+    return {
+        "todayEarnedPoints": score_sum(positive_today),
+        "todayNetPoints": score_sum(today_rows),
+        "monthPoints": month_points,
+        "tier": tier_payload(month_points),
+    }
+
+
+def score_summaries_for_students(env, students, date_text):
+    if not supabase_enabled(env):
+        return {}, ["Noble Star skipped: Supabase is not configured"]
+    ids = {student.get("recordId") for student in students if student.get("recordId")}
+    if not ids:
+        return {}, []
+    rows = fetch_score_events(env, start_date=month_start(date_text), limit=10000)
+    grouped = {}
+    for row in rows:
+        student_id = clean_text(row.get("student_record_id"))
+        if student_id in ids:
+            grouped.setdefault(student_id, []).append(row)
+    return {
+        student_id: score_summary(grouped.get(student_id, []), date_text)
+        for student_id in ids
+    }, []
+
+
 def build_payload(env, date_text):
     token = get_tenant_access_token(env["LARK_APP_ID"], env["LARK_APP_SECRET"])
     students = [
@@ -152,6 +197,13 @@ def build_payload(env, date_text):
     ]
     active_students = [student for student in students if not student["stopped"]]
     source, attendance_records = fetch_attendance(env, date_text)
+    sync_warnings = []
+    try:
+        scores_by_student, score_warnings = score_summaries_for_students(env, active_students, date_text)
+        sync_warnings.extend(score_warnings)
+    except Exception as exc:
+        scores_by_student = {}
+        sync_warnings.append(f"Noble Star sync failed: {exc}")
     return {
         "success": True,
         "date": date_text,
@@ -159,6 +211,7 @@ def build_payload(env, date_text):
         "updatedAt": datetime.now(TZ).isoformat(timespec="seconds"),
         "students": active_students,
         "attendance": attendance_records,
+        "scoresByStudentRecordId": scores_by_student,
         "options": {
             "campuses": value_options(active_students, "campus"),
             "blocks": value_options(active_students, "block"),
@@ -168,6 +221,7 @@ def build_payload(env, date_text):
             "students": len(active_students),
             "attendance": len(attendance_records),
         },
+        "syncWarnings": sync_warnings,
     }
 
 
