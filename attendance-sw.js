@@ -1,11 +1,11 @@
-const CACHE = 'attendance-shell-v56';
+const CACHE = 'attendance-shell-v57';
 const ASSETS = [
   '/',
   '/attendance.html',
   '/attendance-dashboard.html',
   '/attendance.webmanifest',
   '/js/attendance.js?v=standalone-v45',
-  '/js/attendance-dashboard.js?v=14'
+  '/js/attendance-dashboard.js?v=15'
 ];
 
 self.addEventListener('install', (event) => {

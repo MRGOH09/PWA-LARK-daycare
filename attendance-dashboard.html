@@ -185,9 +185,29 @@
     overflow: auto;
     padding: 10px;
   }
+  .matrix-sections {
+    display: grid;
+    gap: 14px;
+  }
+  .matrix-campus {
+    min-width: 680px;
+  }
+  .matrix-campus-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 2px 8px;
+  }
+  .matrix-campus-head strong {
+    font-size: 14px;
+  }
+  .matrix-campus-head span {
+    color: var(--muted);
+    font-size: 12px;
+  }
   .matrix {
     width: 100%;
-    min-width: 620px;
     border-collapse: separate;
     border-spacing: 1px;
     background: var(--border);
@@ -496,8 +516,8 @@
     <article class="panel">
       <div class="panel-head">
         <div>
-          <h2>Block × 时间段</h2>
-          <p>点击格子只看该部分学生</p>
+          <h2>分院 × BLOCK × 时间段</h2>
+          <p>先看分院，再看该分院下的 BLOCK 和时间段</p>
         </div>
         <button id="clear-matrix-filter" type="button" hidden>清除</button>
       </div>
@@ -521,6 +541,6 @@
   </div>
 </section>
 
-<script src="js/attendance-dashboard.js?v=14" defer></script>
+<script src="js/attendance-dashboard.js?v=15" defer></script>
 </body>
 </html>

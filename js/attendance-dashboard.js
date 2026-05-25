@@ -443,17 +443,33 @@
     return eventFallbackAttendance(data || {});
   }
 
+  function studentMatchesFilters(student, options = {}) {
+    const ignore = new Set(options.ignore || []);
+    if (state.range === 'day' && studentDate(student) !== activeDate()) return false;
+    if (!ignore.has('campus') && state.filters.campus && student.campus !== state.filters.campus) return false;
+    if (!ignore.has('year') && state.filters.year && student.year !== state.filters.year) return false;
+    if (!ignore.has('block') && state.filters.block && student.block !== state.filters.block) return false;
+    if (!ignore.has('period') && state.filters.period && student.period !== state.filters.period) return false;
+    if (!ignore.has('teacher') && state.filters.teacher && student.teacher !== state.filters.teacher) return false;
+    if (!ignore.has('status') && state.filters.status && student.status !== state.filters.status) return false;
+    return true;
+  }
+
   function filteredStudents() {
     const students = attendanceDataset(state.data).students || [];
     const search = state.filters.search.trim().toLowerCase();
     return students.filter((student) => {
-      if (state.range === 'day' && studentDate(student) !== activeDate()) return false;
-      if (state.filters.campus && student.campus !== state.filters.campus) return false;
-      if (state.filters.year && student.year !== state.filters.year) return false;
-      if (state.filters.block && student.block !== state.filters.block) return false;
-      if (state.filters.period && student.period !== state.filters.period) return false;
-      if (state.filters.teacher && student.teacher !== state.filters.teacher) return false;
-      if (state.filters.status && student.status !== state.filters.status) return false;
+      if (!studentMatchesFilters(student)) return false;
+      if (!search) return true;
+      return [student.studentName, student.studentNo, student.teacher, student.block, student.campus]
+        .some((value) => String(value || '').toLowerCase().includes(search));
+    });
+  }
+
+  function matrixStudents(students) {
+    const search = state.filters.search.trim().toLowerCase();
+    return (students || []).filter((student) => {
+      if (!studentMatchesFilters(student, { ignore: ['block', 'period'] })) return false;
       if (!search) return true;
       return [student.studentName, student.studentNo, student.teacher, student.block, student.campus]
         .some((value) => String(value || '').toLowerCase().includes(search));
@@ -489,10 +505,26 @@
     return totals;
   }
 
+  function campusBreakdown(students) {
+    const counts = {};
+    students.forEach((student) => {
+      const campus = student.campus || '未记录分院';
+      counts[campus] = (counts[campus] || 0) + 1;
+    });
+    const list = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    return {
+      count: list.length,
+      largest: list.length ? `${list[0][0]} ${list[0][1]}人` : '-'
+    };
+  }
+
   function renderStudentSummary(students) {
     const totals = summarizeStudents(students);
+    const campuses = campusBreakdown(students);
     elSummary.innerHTML = [
       ['学生记录', totals.totalRecords],
+      ['分院数', campuses.count],
+      ['最大分院', campuses.largest],
       ['完成率', `${totals.completionRate}%`],
       ['已完成', totals.complete],
       ['部分未点', totals.partial],
@@ -562,58 +594,77 @@
     });
   }
 
-  function groupByBlockPeriod(students) {
-    const blocks = [];
-    const periods = [];
+  function groupByCampusBlockPeriod(students) {
+    const campuses = [];
+    const campusData = {};
     const cells = {};
     students.forEach((student) => {
+      const campus = student.campus || '未记录分院';
       const block = student.block || '未记录 BLOCK';
       const period = student.period || '未记录时间';
-      if (!blocks.includes(block)) blocks.push(block);
-      if (!periods.includes(period)) periods.push(period);
-      const key = `${block}|||${period}`;
+      if (!campuses.includes(campus)) campuses.push(campus);
+      const group = campusData[campus] || { blocks: [], periods: [], students: [] };
+      if (!group.blocks.includes(block)) group.blocks.push(block);
+      if (!group.periods.includes(period)) group.periods.push(period);
+      group.students.push(student);
+      campusData[campus] = group;
+      const key = `${campus}|||${block}|||${period}`;
       (cells[key] = cells[key] || []).push(student);
     });
-    return {
-      blocks: blocks.sort(),
-      periods: periods.sort(),
-      cells
-    };
+    campuses.forEach((campus) => {
+      campusData[campus].blocks.sort();
+      campusData[campus].periods.sort();
+    });
+    return { campuses: campuses.sort(), campusData, cells };
   }
 
   function renderMatrix(students) {
     if (!elMatrix) return;
-    const { blocks, periods, cells } = groupByBlockPeriod(students);
-    if (!blocks.length || !periods.length) {
-      elMatrix.innerHTML = '<div class="empty">当前范围没有 BLOCK / 时间段数据。</div>';
+    const matrixBase = matrixStudents(students);
+    const { campuses, campusData, cells } = groupByCampusBlockPeriod(matrixBase);
+    if (!campuses.length) {
+      elMatrix.innerHTML = '<div class="empty">当前范围没有分院 / BLOCK / 时间段数据。</div>';
       return;
     }
-    elMatrix.innerHTML = `<table class="matrix">
-      <thead>
-        <tr>
-          <th>时间段</th>
-          ${blocks.map((block) => `<th>${escapeHtml(block)}</th>`).join('')}
-        </tr>
-      </thead>
-      <tbody>
-        ${periods.map((period) => `<tr>
-          <th>${escapeHtml(period)}</th>
-          ${blocks.map((block) => {
-            const key = `${block}|||${period}`;
-            const list = cells[key] || [];
-            const totals = summarizeStudents(list);
-            const klass = completionClass(totals.completionRate, list.length);
-            const disabled = list.length ? '' : ' disabled';
-            return `<td><button class="${klass}" type="button" data-block="${escapeHtml(block)}" data-period="${escapeHtml(period)}"${disabled}>
-              ${list.length ? `${totals.completionRate}%` : '-'}
-              <span>${list.length}人 · ${totals.partial + totals.notStarted}未点 · ${totals.absent}异常</span>
-            </button></td>`;
-          }).join('')}
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-    elMatrix.querySelectorAll('[data-block][data-period]').forEach((btn) => {
+    elMatrix.innerHTML = `<div class="matrix-sections">
+      ${campuses.map((campus) => {
+        const group = campusData[campus];
+        const campusTotals = summarizeStudents(group.students);
+        return `<section class="matrix-campus">
+          <div class="matrix-campus-head">
+            <strong>${escapeHtml(campus)}</strong>
+            <span>${escapeHtml(group.students.length)}人 · ${escapeHtml(campusTotals.completionRate)}%完成 · ${escapeHtml(campusTotals.partial + campusTotals.notStarted)}未点 · ${escapeHtml(campusTotals.absent)}异常</span>
+          </div>
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>时间段</th>
+                ${group.blocks.map((block) => `<th>${escapeHtml(block)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${group.periods.map((period) => `<tr>
+                <th>${escapeHtml(period)}</th>
+                ${group.blocks.map((block) => {
+                  const key = `${campus}|||${block}|||${period}`;
+                  const list = cells[key] || [];
+                  const totals = summarizeStudents(list);
+                  const klass = completionClass(totals.completionRate, list.length);
+                  const disabled = list.length ? '' : ' disabled';
+                  return `<td><button class="${klass}" type="button" data-campus="${escapeHtml(campus)}" data-block="${escapeHtml(block)}" data-period="${escapeHtml(period)}"${disabled}>
+                    ${list.length ? `${totals.completionRate}%` : '-'}
+                    <span>${list.length}人 · ${totals.partial + totals.notStarted}未点 · ${totals.absent}异常</span>
+                  </button></td>`;
+                }).join('')}
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </section>`;
+      }).join('')}
+    </div>`;
+    elMatrix.querySelectorAll('[data-campus][data-block][data-period]').forEach((btn) => {
       btn.addEventListener('click', () => {
+        state.filters.campus = btn.dataset.campus || '';
         state.filters.block = btn.dataset.block || '';
         state.filters.period = btn.dataset.period || '';
         renderCurrentView();
@@ -625,6 +676,8 @@
     if (!elScopeNote) return;
     const hasFilter = ['search', 'campus', 'year', 'block', 'period', 'teacher', 'status']
       .some((key) => Boolean(state.filters[key]));
+    const campusText = state.filters.campus ? ` · 分院：${state.filters.campus}` : '';
+    const blockText = state.filters.block ? ` · BLOCK：${state.filters.block}` : '';
     const periodText = state.filters.period ? ` · 时间段：${state.filters.period}` : '';
     const rangeLabel = state.range === 'month' ? '所选月份' : '所选日期';
     const scope = hasFilter ? '当前统计：筛选后的部分数据' : `当前统计：${rangeLabel}的全部点名记录`;
@@ -632,7 +685,7 @@
       ? '数据来源：老师点名操作日志；未被操作过的学生不会被计入。'
       : '数据来源：已生成的 attendance_records；未生成记录的应到学生不会被计入。';
     elScopeNote.hidden = false;
-    elScopeNote.innerHTML = `<span><strong>${escapeHtml(scope)}</strong>${escapeHtml(periodText)} · 显示 ${visibleStudents.length} / ${totalStudents.length} 条学生记录</span>
+    elScopeNote.innerHTML = `<span><strong>${escapeHtml(scope)}</strong>${escapeHtml(campusText + blockText + periodText)} · 显示 ${visibleStudents.length} / ${totalStudents.length} 条学生记录</span>
       <span>${escapeHtml(dataSource)}</span>`;
   }
 
@@ -718,7 +771,7 @@
     renderStepOverview(students);
     renderStudentTable(students);
     if (elClearMatrixFilter) {
-      elClearMatrixFilter.hidden = !(state.filters.block || state.filters.period);
+      elClearMatrixFilter.hidden = !(state.filters.campus || state.filters.block || state.filters.period);
     }
   }
 
@@ -965,6 +1018,7 @@
       });
     });
     elClearMatrixFilter.addEventListener('click', () => {
+      state.filters.campus = '';
       state.filters.block = '';
       state.filters.period = '';
       renderCurrentView();
