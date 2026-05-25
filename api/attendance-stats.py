@@ -29,6 +29,11 @@ STEP_LABELS = {
     "home": "回家/去学校",
     "note": "备注",
 }
+STEP_KEYS = [key for key in STEP_LABELS if key != "note"]
+MISSING_VALUE = "未点"
+ABSENT_VALUES = {"缺席", "未接"}
+HOMEWORK_DONE_VALUE = "完成了"
+HOMEWORK_NOT_DONE_VALUE = "没完成"
 
 
 def clean_text(value):
@@ -193,6 +198,173 @@ def fetch_attendance_record_summaries(env, start_date, end_date):
     return out
 
 
+def fetch_attendance_records_for_stats(env, start_date, end_date):
+    config = supabase_config(env)
+    if not config:
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+    return fetch_table_rows(
+        config,
+        config["attendance_table"],
+        [
+            ("select", "*"),
+            ("date", f"gte.{start_date}"),
+            ("date", f"lt.{end_date}"),
+            ("order", "date.desc,campus.asc,block.asc,period.asc,student_no.asc,student_name.asc"),
+        ],
+        "fetch attendance records for stats",
+    )
+
+
+def step_value(record, step):
+    return clean_text(record.get(step)) or MISSING_VALUE
+
+
+def student_status(record, missing_steps, absent_steps):
+    if absent_steps:
+        return "absent"
+    if len(missing_steps) == len(STEP_KEYS):
+        return "not-started"
+    if missing_steps:
+        return "partial"
+    return "complete"
+
+
+def student_status_label(status):
+    return {
+        "complete": "已完成",
+        "partial": "部分未点",
+        "not-started": "未开始",
+        "absent": "缺席/未接",
+    }.get(status, status)
+
+
+def build_attendance_overview(records):
+    totals = {
+        "totalRecords": len(records or []),
+        "complete": 0,
+        "partial": 0,
+        "notStarted": 0,
+        "absent": 0,
+        "missingItems": 0,
+        "homeworkCompleted": 0,
+        "homeworkNotCompleted": 0,
+        "completionRate": 0,
+    }
+    by_step = {
+        step: {"label": STEP_LABELS[step], "checked": 0, "missing": 0, "values": {}}
+        for step in STEP_KEYS
+    }
+    filters = {
+        "dates": set(),
+        "campuses": set(),
+        "years": set(),
+        "blocks": set(),
+        "periods": set(),
+        "teachers": set(),
+        "statuses": [
+            {"key": "complete", "label": student_status_label("complete")},
+            {"key": "partial", "label": student_status_label("partial")},
+            {"key": "not-started", "label": student_status_label("not-started")},
+            {"key": "absent", "label": student_status_label("absent")},
+        ],
+    }
+    students = []
+    checked_items = 0
+    total_items = len(records or []) * len(STEP_KEYS)
+
+    for row in records or []:
+        date_text = clean_text(row.get("date"))
+        missing_steps = []
+        absent_steps = []
+        checked_step_count = 0
+        step_values = {}
+        for step in STEP_KEYS:
+            value = step_value(row, step)
+            step_values[step] = value
+            by_step[step]["values"][value] = by_step[step]["values"].get(value, 0) + 1
+            if value == MISSING_VALUE:
+                missing_steps.append({"key": step, "label": STEP_LABELS[step]})
+                by_step[step]["missing"] += 1
+            else:
+                checked_step_count += 1
+                checked_items += 1
+                by_step[step]["checked"] += 1
+            if value in ABSENT_VALUES:
+                absent_steps.append({"key": step, "label": STEP_LABELS[step], "value": value})
+
+        status = student_status(row, missing_steps, absent_steps)
+        if status == "complete":
+            totals["complete"] += 1
+        elif status == "partial":
+            totals["partial"] += 1
+        elif status == "not-started":
+            totals["notStarted"] += 1
+        elif status == "absent":
+            totals["absent"] += 1
+        totals["missingItems"] += len(missing_steps)
+        homework = step_values.get("homework", MISSING_VALUE)
+        if homework == HOMEWORK_DONE_VALUE:
+            totals["homeworkCompleted"] += 1
+        elif homework == HOMEWORK_NOT_DONE_VALUE:
+            totals["homeworkNotCompleted"] += 1
+
+        student = {
+            "date": date_text,
+            "studentRecordId": clean_text(row.get("student_record_id")),
+            "studentNo": clean_text(row.get("student_no")),
+            "studentName": clean_text(row.get("student_name")) or "未记录学生",
+            "year": clean_text(row.get("year_form")),
+            "block": clean_text(row.get("block")),
+            "campus": clean_text(row.get("campus")),
+            "period": clean_text(row.get("period")),
+            "teacher": clean_text(row.get("teacher")),
+            "status": status,
+            "statusLabel": student_status_label(status),
+            "checkedSteps": checked_step_count,
+            "totalSteps": len(STEP_KEYS),
+            "completionRate": round((checked_step_count / len(STEP_KEYS)) * 100) if STEP_KEYS else 0,
+            "missingSteps": missing_steps,
+            "absentSteps": absent_steps,
+            "steps": step_values,
+            "note": clean_text(row.get("note")),
+            "updatedAt": clean_text(row.get("updated_at")),
+            "updatedByName": clean_text(row.get("updated_by_name")),
+            "updatedByEmail": clean_text(row.get("updated_by_email")),
+        }
+        students.append(student)
+
+        for key, value in [
+            ("dates", date_text),
+            ("campuses", student["campus"]),
+            ("years", student["year"]),
+            ("blocks", student["block"]),
+            ("periods", student["period"]),
+            ("teachers", student["teacher"]),
+        ]:
+            if value:
+                filters[key].add(value)
+
+    totals["completionRate"] = round((checked_items / total_items) * 100) if total_items else 0
+    students.sort(key=lambda item: (
+        item.get("date") or "",
+        item.get("campus") or "",
+        item.get("block") or "",
+        item.get("period") or "",
+        item.get("studentNo") or "",
+        item.get("studentName") or "",
+    ))
+    serializable_filters = {
+        key: sorted(value) if isinstance(value, set) else value
+        for key, value in filters.items()
+    }
+    return {
+        "totals": totals,
+        "byStep": by_step,
+        "students": students,
+        "filters": serializable_filters,
+    }
+
+
 def event_detail(event, student_lookup):
     student_id = clean_text(event.get("student_record_id"))
     date_text = clean_text(event.get("date"))
@@ -284,6 +456,7 @@ class handler(BaseHTTPRequestHandler):
             params = query_params(self.path)
             range_info = stats_range(params)
             events = fetch_attendance_events(env, range_info["startDate"], range_info["endDate"])
+            attendance_records = fetch_attendance_records_for_stats(env, range_info["startDate"], range_info["endDate"])
             student_lookup = fetch_attendance_record_summaries(env, range_info["startDate"], range_info["endDate"])
             whitelist_profiles = fetch_whitelist_profiles(env)
             totals, people = build_stats(events, whitelist_profiles, student_lookup)
@@ -294,6 +467,7 @@ class handler(BaseHTTPRequestHandler):
                 "stepLabels": STEP_LABELS,
                 "totals": totals,
                 "people": people,
+                "attendance": build_attendance_overview(attendance_records),
             }
             if "month" not in payload:
                 payload["month"] = current_month()
