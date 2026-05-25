@@ -9,6 +9,16 @@
       "has": [
         {
           "type": "host",
+          "value": "(attendance-dashboard\\..+|.*attendance-dashboard.*\\.vercel\\.app)"
+        }
+      ],
+      "destination": "/attendance-dashboard.html"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
           "value": "(attendance\\..+|.*attendance.*\\.vercel\\.app)"
         }
       ],
