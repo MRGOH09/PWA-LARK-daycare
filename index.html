@@ -9,6 +9,10 @@
 <script>
   (function () {
     var host = window.location.hostname;
+    if (host.includes('attendance-dashboard') || host === 'pwa-lark-daycare-attendance-dashboa.vercel.app') {
+      if (window.location.pathname === '/') window.location.replace('/attendance-dashboard.html');
+      return;
+    }
     if (host.endsWith('.vercel.app') && host.includes('attendance') && window.location.pathname === '/') {
       window.location.replace('/attendance.html');
     }
