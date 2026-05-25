@@ -51,6 +51,7 @@
 
   function getApiOrigin() {
     const host = window.location.hostname;
+    if (host.includes('attendance-dashboard') || host === 'pwa-lark-daycare-attendance-dashboa.vercel.app') return '';
     return host.endsWith('.vercel.app') && host.includes('attendance') ? MAIN_API_ORIGIN : '';
   }
 
