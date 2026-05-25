@@ -51,7 +51,6 @@
 
   function getApiOrigin() {
     const host = window.location.hostname;
-    if (host.includes('attendance-dashboard')) return '';
     return host.endsWith('.vercel.app') && host.includes('attendance') ? MAIN_API_ORIGIN : '';
   }
 
