@@ -11,7 +11,8 @@
     data: null,
     filters: { search: '', campus: '', year: '', block: '', period: '', teacher: '', status: '' },
     selectedDate: '',
-    monthData: null
+    monthData: null,
+    studentMaster: null
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -325,6 +326,59 @@
     };
   }
 
+  function fieldValue(fields, names) {
+    for (const name of names) {
+      const value = fields && fields[name];
+      if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+    }
+    return '';
+  }
+
+  function buildStudentMaster(records) {
+    const lookup = {};
+    (records || []).forEach((record) => {
+      const fields = record.fields || {};
+      const info = {
+        studentRecordId: record.recordId || '',
+        studentNo: fieldValue(fields, ['NO', '学生NO', 'Student No']),
+        studentName: fieldValue(fields, ['学生名字', '学生姓名', 'Name']),
+        year: fieldValue(fields, ['YEAR / FORM', 'Year / Form', '年级']),
+        block: fieldValue(fields, ['BLOCK', 'Block']),
+        campus: fieldValue(fields, ['分院', '校区', 'Campus']),
+        period: fieldValue(fields, ['时间段', '时段', 'Time']),
+        teacher: fieldValue(fields, ['负责老师', '老师', 'Teacher'])
+      };
+      if (info.studentRecordId) lookup[info.studentRecordId] = info;
+      if (info.studentNo) lookup[`NO:${info.studentNo}`] = info;
+      if (info.studentName) lookup[`NAME:${info.studentName}`] = info;
+    });
+    return lookup;
+  }
+
+  async function loadStudentMaster() {
+    if (state.studentMaster) return state.studentMaster;
+    try {
+      const resp = await fetch(apiUrl('/api/students?t=' + Date.now()), {
+        cache: 'no-store',
+        headers: authHeaders()
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      state.studentMaster = buildStudentMaster(data.records || []);
+    } catch {
+      state.studentMaster = {};
+    }
+    return state.studentMaster;
+  }
+
+  function masterStudentInfo(detail) {
+    const lookup = state.studentMaster || {};
+    return lookup[detail.studentRecordId]
+      || lookup[`NO:${detail.studentNo || ''}`]
+      || lookup[`NAME:${detail.studentName || ''}`]
+      || {};
+  }
+
   function eventFallbackAttendance(data) {
     const labels = (data && data.stepLabels) || {};
     const byStudent = {};
@@ -334,17 +388,18 @@
         const studentId = detail.studentRecordId || detail.studentNo || detail.studentName || '';
         const step = detail.stepKey || '';
         if (!date || !studentId || !STEP_ORDER.includes(step)) return;
+        const master = masterStudentInfo(detail);
         const key = `${date}|||${studentId}`;
         const row = byStudent[key] || {
           date,
           studentRecordId: detail.studentRecordId || studentId,
-          studentNo: detail.studentNo || '',
-          studentName: detail.studentName || studentId || '未记录学生',
-          year: detail.year || '',
-          block: detail.block || '未记录 BLOCK',
-          campus: detail.campus || '',
-          period: detail.period || '未记录时间',
-          teacher: detail.teacher || person.name || '',
+          studentNo: detail.studentNo || master.studentNo || '',
+          studentName: detail.studentName || master.studentName || studentId || '未记录学生',
+          year: detail.year || master.year || '',
+          block: detail.block || master.block || '未记录 BLOCK',
+          campus: detail.campus || master.campus || '',
+          period: detail.period || master.period || '未记录时间',
+          teacher: detail.teacher || master.teacher || person.name || '',
           steps: {},
           updatedAt: detail.createdAt || '',
           updatedByName: person.name || '',
@@ -779,6 +834,7 @@
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      await loadStudentMaster();
       state.data = data;
       if (state.range === 'month') state.monthData = data;
       elMeta.textContent = `${labelForRange(data)} · 更新于 ${data.updatedAt || '-'}`;
@@ -815,6 +871,7 @@
     }
     try {
       const data = await fetchStatsRange('month', month);
+      await loadStudentMaster();
       state.monthData = data;
       if (state.view === 'students') renderCalendar();
       if (allowFallback && !attendanceRecords(data).length) findLatestMonthWithData(month);
@@ -830,6 +887,7 @@
       month = i === 0 ? month : previousMonth(month);
       try {
         const data = await fetchStatsRange('month', month);
+        await loadStudentMaster();
         if (attendanceRecords(data).length) {
           state.range = 'month';
           state.data = data;

@@ -8,7 +8,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _auth import AuthError, fetch_whitelist_profiles, require_attendance_auth  # noqa: E402
-from _lark import get_env, send_json  # noqa: E402
+from _lark import (  # noqa: E402
+    fetch_student_records,
+    get_env,
+    get_tenant_access_token,
+    normalize_generic_record,
+    send_json,
+)
 from _supabase import (  # noqa: E402
     fetch_attendance_events,
     fetch_table_rows,
@@ -34,6 +40,13 @@ MISSING_VALUE = "未点"
 ABSENT_VALUES = {"缺席", "未接"}
 HOMEWORK_DONE_VALUE = "完成了"
 HOMEWORK_NOT_DONE_VALUE = "没完成"
+STUDENT_FIELD_NO = "NO"
+STUDENT_FIELD_NAME = "学生名字"
+STUDENT_FIELD_YEAR = "YEAR / FORM"
+STUDENT_FIELD_TEACHER = "负责老师"
+STUDENT_FIELD_PERIOD = "时间段"
+STUDENT_FIELD_BLOCK = "BLOCK"
+STUDENT_FIELD_CAMPUS = "分院"
 
 
 def clean_text(value):
@@ -195,6 +208,31 @@ def fetch_attendance_record_summaries(env, start_date, end_date):
         if date_text:
             out[f"{date_text}|{student_id}"] = summary
         out.setdefault(student_id, summary)
+    return out
+
+
+def fetch_student_master_summaries(env):
+    token = get_tenant_access_token(env["LARK_APP_ID"], env["LARK_APP_SECRET"])
+    out = {}
+    for item in fetch_student_records(token, env):
+        record = normalize_generic_record(item)
+        fields = record.get("fields", {}) or {}
+        record_id = clean_text(record.get("recordId"))
+        student_no = clean_text(fields.get(STUDENT_FIELD_NO))
+        summary = {
+            "studentRecordId": record_id,
+            "studentNo": student_no,
+            "studentName": clean_text(fields.get(STUDENT_FIELD_NAME)),
+            "year": clean_text(fields.get(STUDENT_FIELD_YEAR)),
+            "block": clean_text(fields.get(STUDENT_FIELD_BLOCK)),
+            "campus": clean_text(fields.get(STUDENT_FIELD_CAMPUS)),
+            "period": clean_text(fields.get(STUDENT_FIELD_PERIOD)),
+            "teacher": clean_text(fields.get(STUDENT_FIELD_TEACHER)),
+        }
+        if record_id:
+            out[record_id] = summary
+        if student_no:
+            out[f"NO:{student_no}"] = summary
     return out
 
 
@@ -389,7 +427,12 @@ def build_event_attendance_overview(events, student_lookup):
 
     rows = []
     for (date_text, student_id), row in latest.items():
-        student = student_lookup.get(f"{date_text}|{student_id}") or student_lookup.get(student_id) or {}
+        student = (
+            student_lookup.get(f"{date_text}|{student_id}")
+            or student_lookup.get(student_id)
+            or student_lookup.get(f"NO:{student_id}")
+            or {}
+        )
         rows.append({
             **row,
             "student_no": clean_text(student.get("studentNo")),
@@ -499,6 +542,10 @@ class handler(BaseHTTPRequestHandler):
             events = fetch_attendance_events(env, range_info["startDate"], range_info["endDate"])
             attendance_records = fetch_attendance_records_for_stats(env, range_info["startDate"], range_info["endDate"])
             student_lookup = fetch_attendance_record_summaries(env, range_info["startDate"], range_info["endDate"])
+            try:
+                student_lookup.update(fetch_student_master_summaries(env))
+            except Exception:
+                pass
             whitelist_profiles = fetch_whitelist_profiles(env)
             totals, people = build_stats(events, whitelist_profiles, student_lookup)
             attendance = build_attendance_overview(attendance_records)
