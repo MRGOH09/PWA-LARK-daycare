@@ -849,6 +849,29 @@
     }
   }
 
+  async function updateVersion() {
+    if (elQuickRefresh) {
+      elQuickRefresh.disabled = true;
+      elQuickRefresh.textContent = '更新中…';
+    }
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    } catch (err) {
+      console.warn('version update cleanup failed', err);
+    } finally {
+      const url = new URL(window.location.href);
+      url.searchParams.set('v', String(Date.now()));
+      window.location.replace(url.toString());
+    }
+  }
+
   async function fetchStatsRange(range, value) {
     const params = new URLSearchParams({ range, t: String(Date.now()) });
     if (range === 'month') params.set('month', value || monthValue());
@@ -924,7 +947,7 @@
       loadStats();
     });
     elRefresh.addEventListener('click', loadStats);
-    elQuickRefresh.addEventListener('click', loadStats);
+    elQuickRefresh.addEventListener('click', updateVersion);
     elDate.addEventListener('change', () => {
       state.selectedDate = elDate.value || dateValue();
       loadStats();
