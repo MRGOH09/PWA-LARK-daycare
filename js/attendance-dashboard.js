@@ -73,6 +73,16 @@
     return /^\d{4}-\d{2}/.test(text) ? text.slice(0, 7) : monthValue();
   }
 
+  function previousMonth(monthText) {
+    const [year, month] = String(monthText || monthValue()).split('-').map(Number);
+    const date = new Date(year, month - 2, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function attendanceRecords(data) {
+    return (((data || {}).attendance || {}).students) || [];
+  }
+
   function dateValue() {
     const now = new Date();
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -675,7 +685,8 @@
       if (state.range === 'month') state.monthData = data;
       elMeta.textContent = `${labelForRange(data)} · 更新于 ${data.updatedAt || '-'}`;
       renderCurrentView();
-      if (state.range === 'day') loadMonthOverview();
+      if (state.range === 'day') loadMonthOverview(true);
+      else if (!attendanceRecords(data).length) findLatestMonthWithData(data.month || elMonth.value || monthValue());
     } catch (err) {
       elMeta.textContent = `加载失败：${err.message}`;
       elSteps.hidden = true;
@@ -684,25 +695,58 @@
     }
   }
 
-  async function loadMonthOverview() {
+  async function fetchStatsRange(range, value) {
+    const params = new URLSearchParams({ range, t: String(Date.now()) });
+    if (range === 'month') params.set('month', value || monthValue());
+    else params.set('date', value || dateValue());
+    const resp = await fetch(apiUrl('/api/attendance-stats?' + params.toString()), {
+      cache: 'no-store',
+      headers: authHeaders()
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+    return data;
+  }
+
+  async function loadMonthOverview(allowFallback) {
     const month = monthFromDate(activeDate());
     if (state.monthData && state.monthData.month === month) {
       renderCalendar();
+      if (allowFallback && !attendanceRecords(state.monthData).length) findLatestMonthWithData(month);
       return;
     }
     try {
-      const params = new URLSearchParams({ range: 'month', month, t: String(Date.now()) });
-      const resp = await fetch(apiUrl('/api/attendance-stats?' + params.toString()), {
-        cache: 'no-store',
-        headers: authHeaders()
-      });
-      const data = await resp.json();
-      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      const data = await fetchStatsRange('month', month);
       state.monthData = data;
       if (state.view === 'students') renderCalendar();
+      if (allowFallback && !attendanceRecords(data).length) findLatestMonthWithData(month);
     } catch {
       // Day-level analysis still works if the month overview cannot be loaded.
     }
+  }
+
+  async function findLatestMonthWithData(startMonth) {
+    let month = startMonth || monthValue();
+    elMeta.textContent = `${month} 没有点名记录，正在寻找最近有数据的月份…`;
+    for (let i = 0; i < 18; i += 1) {
+      month = i === 0 ? month : previousMonth(month);
+      try {
+        const data = await fetchStatsRange('month', month);
+        if (attendanceRecords(data).length) {
+          state.range = 'month';
+          state.data = data;
+          state.monthData = data;
+          elMonth.value = data.month || month;
+          setRange('month');
+          elMeta.textContent = `已自动切换到最近有数据的月份：${data.month || month} · 更新于 ${data.updatedAt || '-'}`;
+          renderCurrentView();
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
+    elMeta.textContent = `最近 18 个月没有找到点名记录。`;
   }
 
   async function init() {
