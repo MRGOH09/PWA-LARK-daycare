@@ -51,7 +51,6 @@
 
   function getApiOrigin() {
     const host = window.location.hostname;
-    if (host.includes('attendance-dashboard') || host === 'pwa-lark-daycare-attendance-dashboa.vercel.app') return '';
     return host.endsWith('.vercel.app') && host.includes('attendance') ? MAIN_API_ORIGIN : '';
   }
 
@@ -81,7 +80,7 @@
   }
 
   function attendanceRecords(data) {
-    return (((data || {}).attendance || {}).students) || [];
+    return attendanceDataset(data).students || [];
   }
 
   function dateValue() {
@@ -294,8 +293,103 @@
     }
   }
 
+  function statusLabel(status) {
+    return {
+      complete: '已完成',
+      partial: '部分未点',
+      'not-started': '未开始',
+      absent: '缺席/未接'
+    }[status] || status;
+  }
+
+  function fallbackStudentStatus(missingSteps, steps) {
+    if (Object.values(steps || {}).some((value) => value === '缺席' || value === '未接')) return 'absent';
+    if (missingSteps.length === STEP_ORDER.length) return 'not-started';
+    if (missingSteps.length) return 'partial';
+    return 'complete';
+  }
+
+  function filtersFromStudents(students) {
+    const unique = (values) => Array.from(new Set(values.filter(Boolean))).sort();
+    return {
+      campuses: unique(students.map((student) => student.campus)),
+      years: unique(students.map((student) => student.year)),
+      blocks: unique(students.map((student) => student.block)),
+      teachers: unique(students.map((student) => student.teacher)),
+      statuses: [
+        { key: 'complete', label: '已完成' },
+        { key: 'partial', label: '部分未点' },
+        { key: 'not-started', label: '未开始' },
+        { key: 'absent', label: '缺席/未接' }
+      ]
+    };
+  }
+
+  function eventFallbackAttendance(data) {
+    const labels = (data && data.stepLabels) || {};
+    const byStudent = {};
+    (data.people || []).forEach((person) => {
+      (person.details || []).forEach((detail) => {
+        const date = detail.date || '';
+        const studentId = detail.studentRecordId || detail.studentNo || detail.studentName || '';
+        const step = detail.stepKey || '';
+        if (!date || !studentId || !STEP_ORDER.includes(step)) return;
+        const key = `${date}|||${studentId}`;
+        const row = byStudent[key] || {
+          date,
+          studentRecordId: detail.studentRecordId || studentId,
+          studentNo: detail.studentNo || '',
+          studentName: detail.studentName || studentId || '未记录学生',
+          year: detail.year || '',
+          block: detail.block || '未记录 BLOCK',
+          campus: detail.campus || '',
+          period: detail.period || '未记录时间',
+          teacher: detail.teacher || person.name || '',
+          steps: {},
+          updatedAt: detail.createdAt || '',
+          updatedByName: person.name || '',
+          updatedByEmail: person.email || ''
+        };
+        if (!row.steps[step]) row.steps[step] = detail.newValue || '未点';
+        byStudent[key] = row;
+      });
+    });
+    const students = Object.values(byStudent).map((row) => {
+      const steps = {};
+      const missingSteps = [];
+      let checkedSteps = 0;
+      STEP_ORDER.forEach((step) => {
+        const value = row.steps[step] || '未点';
+        steps[step] = value;
+        if (value === '未点') missingSteps.push({ key: step, label: labels[step] || step });
+        else checkedSteps += 1;
+      });
+      const status = fallbackStudentStatus(missingSteps, steps);
+      return {
+        ...row,
+        steps,
+        status,
+        statusLabel: statusLabel(status),
+        checkedSteps,
+        totalSteps: STEP_ORDER.length,
+        completionRate: STEP_ORDER.length ? Math.round((checkedSteps / STEP_ORDER.length) * 100) : 0,
+        missingSteps,
+        absentSteps: Object.entries(steps)
+          .filter((entry) => entry[1] === '缺席' || entry[1] === '未接')
+          .map((entry) => ({ key: entry[0], label: labels[entry[0]] || entry[0], value: entry[1] }))
+      };
+    }).sort((a, b) => `${a.date}|${a.block}|${a.period}|${a.studentName}`.localeCompare(`${b.date}|${b.block}|${b.period}|${b.studentName}`));
+    return { students, filters: filtersFromStudents(students), source: 'events' };
+  }
+
+  function attendanceDataset(data) {
+    const attendance = (data || {}).attendance || {};
+    if ((attendance.students || []).length) return attendance;
+    return eventFallbackAttendance(data || {});
+  }
+
   function filteredStudents() {
-    const students = (((state.data || {}).attendance || {}).students) || [];
+    const students = attendanceDataset(state.data).students || [];
     const search = state.filters.search.trim().toLowerCase();
     return students.filter((student) => {
       if (state.range === 'day' && studentDate(student) !== activeDate()) return false;
@@ -380,7 +474,7 @@
 
   function renderCalendar() {
     if (!elCalendar) return;
-    const attendance = (state.monthData || state.data || {}).attendance || {};
+    const attendance = attendanceDataset(state.monthData || state.data || {});
     const students = attendance.students || [];
     const monthText = (state.monthData && state.monthData.month) || elMonth.value || monthValue();
     const byDate = groupByDate(students);
@@ -479,9 +573,12 @@
     const periodText = state.filters.period ? ` · 时间段：${state.filters.period}` : '';
     const rangeLabel = state.range === 'month' ? '所选月份' : '所选日期';
     const scope = hasFilter ? '当前统计：筛选后的部分数据' : `当前统计：${rangeLabel}的全部点名记录`;
+    const dataSource = attendanceDataset(state.data || {}).source === 'events'
+      ? '数据来源：老师点名操作日志；未被操作过的学生不会被计入。'
+      : '数据来源：已生成的 attendance_records；未生成记录的应到学生不会被计入。';
     elScopeNote.hidden = false;
     elScopeNote.innerHTML = `<span><strong>${escapeHtml(scope)}</strong>${escapeHtml(periodText)} · 显示 ${visibleStudents.length} / ${totalStudents.length} 条学生记录</span>
-      <span>数据来源：已生成的 attendance_records；未生成记录的应到学生不会被计入。</span>`;
+      <span>${escapeHtml(dataSource)}</span>`;
   }
 
   function renderStepOverview(students) {
@@ -555,7 +652,7 @@
   }
 
   function renderStudentsView() {
-    const attendance = (state.data || {}).attendance || {};
+    const attendance = attendanceDataset(state.data || {});
     renderStudentFilters(attendance);
     renderCalendar();
     const totalStudents = (attendance.students || []).filter((student) => state.range !== 'day' || studentDate(student) === activeDate());

@@ -362,7 +362,48 @@ def build_attendance_overview(records):
         "byStep": by_step,
         "students": students,
         "filters": serializable_filters,
+        "source": "records",
     }
+
+
+def build_event_attendance_overview(events, student_lookup):
+    latest = {}
+    ordered = sorted(events or [], key=lambda item: clean_text(item.get("created_at")), reverse=True)
+    for event in ordered:
+        date_text = clean_text(event.get("date"))
+        student_id = clean_text(event.get("student_record_id"))
+        step = clean_text(event.get("step_key"))
+        if not date_text or not student_id or step not in STEP_KEYS:
+            continue
+        key = (date_text, student_id)
+        row = latest.setdefault(key, {
+            "date": date_text,
+            "student_record_id": student_id,
+        })
+        if step not in row:
+            row[step] = clean_text(event.get("new_value")) or MISSING_VALUE
+            if not row.get("updated_at"):
+                row["updated_at"] = clean_text(event.get("created_at"))
+                row["updated_by_name"] = clean_text(event.get("actor_name"))
+                row["updated_by_email"] = clean_text(event.get("actor_email"))
+
+    rows = []
+    for (date_text, student_id), row in latest.items():
+        student = student_lookup.get(f"{date_text}|{student_id}") or student_lookup.get(student_id) or {}
+        rows.append({
+            **row,
+            "student_no": clean_text(student.get("studentNo")),
+            "student_name": clean_text(student.get("studentName")) or student_id or "未记录学生",
+            "year_form": clean_text(student.get("year")),
+            "block": clean_text(student.get("block")) or "未记录 BLOCK",
+            "campus": clean_text(student.get("campus")),
+            "period": clean_text(student.get("period")) or "未记录时间",
+            "teacher": clean_text(student.get("teacher")),
+        })
+
+    overview = build_attendance_overview(rows)
+    overview["source"] = "events"
+    return overview
 
 
 def event_detail(event, student_lookup):
@@ -460,6 +501,9 @@ class handler(BaseHTTPRequestHandler):
             student_lookup = fetch_attendance_record_summaries(env, range_info["startDate"], range_info["endDate"])
             whitelist_profiles = fetch_whitelist_profiles(env)
             totals, people = build_stats(events, whitelist_profiles, student_lookup)
+            attendance = build_attendance_overview(attendance_records)
+            if not attendance.get("students") and events:
+                attendance = build_event_attendance_overview(events, student_lookup)
             payload = {
                 "success": True,
                 **range_info,
@@ -467,7 +511,7 @@ class handler(BaseHTTPRequestHandler):
                 "stepLabels": STEP_LABELS,
                 "totals": totals,
                 "people": people,
-                "attendance": build_attendance_overview(attendance_records),
+                "attendance": attendance,
             }
             if "month" not in payload:
                 payload["month"] = current_month()
