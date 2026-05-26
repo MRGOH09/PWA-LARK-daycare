@@ -26,7 +26,6 @@
     { key: 'home', label: '回家/去学校', defaultValue: '未点', options: ['未点', '回家', '去学校'] }
   ];
   const FIXED_YEAR_ORDER = ['PA', 'Y1', 'Y2', 'Y3', 'Y4', 'Y5', 'Y6', 'F1', 'F2', 'F3', 'F4', 'F5'];
-  const MAIN_API_ORIGIN = 'https://pwa-lark-daycare.vercel.app';
   const PERSIST_DEBOUNCE_MS = 450;
   const LONG_PRESS_MS = 520;
   const PRIMARY_STEP_VALUES = {
@@ -58,6 +57,13 @@
     modalOpen: false,
     collapsedYears: new Set(),
     currentView: 'attendance',
+    teacherMessagesLoaded: false,
+    teacherMessagesLoading: false,
+    teacherMessagesError: '',
+    teacherMessages: [],
+    teacherMessageReads: {},
+    activeMessageStudentId: '',
+    teacherMessagesFilter: 'all',
     teacherStatsRange: 'day',
     teacherStatsDate: todayDateString(),
     teacherStatsMonth: currentMonthString(),
@@ -106,9 +112,16 @@
   const elRefresh = $('#refresh');
   const elVersionUpdate = $('#version-update');
   const elViewAttendance = $('#view-attendance');
+  const elViewMessages = $('#view-messages');
   const elViewStats = $('#view-stats');
   const elViewSettings = $('#view-settings');
   const elTeacherStatsPanel = $('#teacher-stats-panel');
+  const elTeacherMessagesPanel = $('#teacher-messages-panel');
+  const elTeacherMessagesRefresh = $('#teacher-messages-refresh');
+  const elTeacherMessagesMeta = $('#teacher-messages-meta');
+  const elTeacherMessageList = $('#teacher-message-list');
+  const elTeacherMessageFilterAll = $('#teacher-message-filter-all');
+  const elTeacherMessageFilterMine = $('#teacher-message-filter-mine');
   const elTeacherStatsRangeDay = $('#teacher-stats-range-day');
   const elTeacherStatsRangeMonth = $('#teacher-stats-range-month');
   const elTeacherStatsDate = $('#teacher-stats-date');
@@ -131,11 +144,7 @@
   const elMobileFilterClose = $('#mobile-filter-close');
 
   function getApiOrigin() {
-    const host = window.location.hostname;
-    const isStandaloneVercelAttendance = host.endsWith('.vercel.app') &&
-      host.includes('attendance') &&
-      host !== 'pwa-lark-daycare.vercel.app';
-    return isStandaloneVercelAttendance ? MAIN_API_ORIGIN : '';
+    return '';
   }
 
   function apiUrl(path) {
@@ -364,6 +373,12 @@
 
   async function renderGoogleButton() {
     if (!state.auth.enabled || state.auth.user || !elGoogleButton) return;
+    if (!state.auth.clientId) {
+      elGoogleButton.innerHTML = '';
+      state.auth.error = state.auth.error || 'Google 登录尚未配置：缺少 GOOGLE_CLIENT_ID';
+      setAuthUi();
+      return;
+    }
     await loadGoogleScript();
     window.google.accounts.id.initialize({
       client_id: state.auth.clientId,
@@ -838,9 +853,10 @@
   }
 
   function renderAttendanceMeta(list) {
-    const marked = list.map(attendanceRecordFor).filter(isAttendanceMarked).length;
-    const modeText = state.showUnfinishedOnly ? ' · 只看未点' : '';
-    const metaText = `当前筛选 ${list.length} 人${modeText} · Active 总数 ${state.students.filter((rec) => !isStoppedStudent(rec)).length} 人 · 已开始 ${marked} · ${attendanceSyncLabel()}`;
+    const parts = ['当前筛选'];
+    if (state.showUnfinishedOnly) parts.push('只看未点');
+    parts.push(attendanceSyncLabel());
+    const metaText = parts.join(' · ');
     if (elAttendanceMeta) elAttendanceMeta.textContent = metaText;
     if (elAttendanceListMeta) elAttendanceListMeta.textContent = metaText;
     if (elMobileSyncStatus) elMobileSyncStatus.textContent = attendanceSyncLabel();
@@ -924,26 +940,132 @@
     }).format(date);
   }
 
+  function renderParentMessages(messages) {
+    if (!messages || !messages.length) {
+      return '<div class="attendance-empty">还没有家长留言。</div>';
+    }
+    return messages.map((message) => {
+      const role = message.senderRole === 'teacher' ? 'teacher' : 'parent';
+      const name = message.senderLabel || message.senderName || (role === 'teacher' ? '老师' : '家长');
+      return `<article class="parent-message-item ${role}">
+        <div class="parent-message-meta">
+          <strong>${escapeHtml(name)}</strong>
+          <span>${escapeHtml(formatStatsDateTime(message.createdAt || ''))}</span>
+        </div>
+        <p>${escapeHtml(message.body || '')}</p>
+      </article>`;
+    }).join('');
+  }
+
+  async function loadParentMessagesForModal(studentId) {
+    const thread = document.getElementById('parent-message-thread');
+    const status = document.getElementById('parent-message-status');
+    if (!thread) return;
+    try {
+      const params = new URLSearchParams({ studentRecordId: studentId, t: String(Date.now()) });
+      const resp = await apiFetch('/api/teacher-messages?' + params.toString(), { cache: 'no-store' });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      thread.innerHTML = renderParentMessages(data.messages || []);
+      thread.scrollTop = thread.scrollHeight;
+      if (status) status.textContent = '';
+    } catch (err) {
+      thread.innerHTML = `<div class="attendance-empty error-state">留言读取失败：${escapeHtml(err.message)}</div>`;
+      if (status) status.textContent = '';
+    }
+  }
+
+  async function sendTeacherMessage(rec) {
+    const input = document.getElementById('parent-message-input');
+    const sendBtn = document.getElementById('parent-message-send');
+    const status = document.getElementById('parent-message-status');
+    const body = input ? input.value.trim() : '';
+    if (!body) {
+      if (status) status.textContent = '请先输入回复内容。';
+      return;
+    }
+    if (sendBtn) sendBtn.disabled = true;
+    if (status) status.textContent = '发送中…';
+    try {
+      const payload = attendanceStudentPayload(rec);
+      const resp = await apiFetch('/api/teacher-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentRecordId: payload.recordId,
+          studentNo: payload.no,
+          studentName: payload.name,
+          body
+        })
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      if (input) input.value = '';
+      if (status) status.textContent = '已发送';
+      loadParentMessagesForModal(payload.recordId);
+    } catch (err) {
+      if (status) status.textContent = `发送失败：${err.message}`;
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
+    }
+  }
+
   function isStatsView() {
     return state.currentView === 'stats';
+  }
+
+  function isMessagesView() {
+    return state.currentView === 'messages';
   }
 
   function isSettingsView() {
     return state.currentView === 'settings';
   }
 
+  function setMessageChatOpen(open) {
+    document.documentElement.dataset.messageChat = open ? 'open' : 'closed';
+  }
+
+  function updateKeyboardInset() {
+    const viewport = window.visualViewport;
+    const keyboardHeight = viewport
+      ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      : 0;
+    const visualHeight = viewport ? viewport.height : window.innerHeight;
+    const visualTop = viewport ? viewport.offsetTop : 0;
+    document.documentElement.style.setProperty('--keyboard-height', `${Math.round(keyboardHeight)}px`);
+    document.documentElement.style.setProperty('--visual-height', `${Math.round(visualHeight)}px`);
+    document.documentElement.style.setProperty('--visual-top', `${Math.round(visualTop)}px`);
+    if (state.activeMessageStudentId) scrollTeacherMessageThread();
+  }
+
+  function scrollTeacherMessageThread() {
+    const thread = document.getElementById('teacher-message-thread');
+    if (!thread) return;
+    window.setTimeout(() => {
+      thread.scrollTop = thread.scrollHeight;
+    }, 0);
+  }
+
   function setViewUi() {
     const statsView = isStatsView();
+    const messagesView = isMessagesView();
     const settingsView = isSettingsView();
-    document.documentElement.dataset.view = settingsView ? 'settings' : (statsView ? 'stats' : 'attendance');
+    if (!messagesView || !state.activeMessageStudentId) setMessageChatOpen(false);
+    document.documentElement.dataset.view = settingsView ? 'settings' : (messagesView ? 'messages' : (statsView ? 'stats' : 'attendance'));
     if (!settingsView) document.documentElement.dataset.filterOpen = 'false';
-    if (elAttendanceSummary) elAttendanceSummary.hidden = statsView || settingsView;
-    if (elAttendanceMain) elAttendanceMain.hidden = statsView || settingsView;
+    if (elAttendanceSummary) elAttendanceSummary.hidden = statsView || messagesView || settingsView;
+    if (elAttendanceMain) elAttendanceMain.hidden = statsView || messagesView || settingsView;
     if (elTeacherStatsPanel) elTeacherStatsPanel.hidden = !statsView;
+    if (elTeacherMessagesPanel) elTeacherMessagesPanel.hidden = !messagesView;
     if (elMobileSettingsPanel) elMobileSettingsPanel.hidden = !settingsView;
     if (elViewAttendance) {
-      elViewAttendance.classList.toggle('active', !statsView && !settingsView);
-      elViewAttendance.setAttribute('aria-selected', (!statsView && !settingsView) ? 'true' : 'false');
+      elViewAttendance.classList.toggle('active', !statsView && !messagesView && !settingsView);
+      elViewAttendance.setAttribute('aria-selected', (!statsView && !messagesView && !settingsView) ? 'true' : 'false');
+    }
+    if (elViewMessages) {
+      elViewMessages.classList.toggle('active', messagesView);
+      elViewMessages.setAttribute('aria-selected', messagesView ? 'true' : 'false');
     }
     if (elViewStats) {
       elViewStats.classList.toggle('active', statsView);
@@ -970,6 +1092,481 @@
       const active = state.teacherStatsRange === 'month';
       elTeacherStatsRangeMonth.classList.toggle('active', active);
       elTeacherStatsRangeMonth.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+  }
+
+  function studentLabelById(studentRecordId) {
+    const rec = attendanceStudentById(studentRecordId);
+    if (!rec) return null;
+    return {
+      name: studentValue(rec, STUDENT_FIELDS.name) || '-',
+      no: studentValue(rec, STUDENT_FIELDS.no),
+      year: studentValue(rec, STUDENT_FIELDS.year),
+      block: studentValue(rec, STUDENT_FIELDS.block),
+      campus: studentValue(rec, STUDENT_FIELDS.campus),
+      period: attendanceTimeSegment(rec),
+    };
+  }
+
+  function groupedTeacherMessages() {
+    const groups = new Map();
+    (state.teacherMessages || []).forEach((message) => {
+      const key = message.studentRecordId || message.studentNo || message.studentName || message.id;
+      if (!key) return;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          studentRecordId: message.studentRecordId || '',
+          studentNo: message.studentNo || '',
+          studentName: message.studentName || '',
+          latest: message,
+          count: 0,
+          parentCount: 0,
+          teacherCount: 0,
+          mentionedMe: false,
+          latestMentionedMeAt: '',
+        });
+      }
+      const group = groups.get(key);
+      group.count += 1;
+      if (messageMentionsMe(message)) {
+        const mentionTime = String(message.createdAt || '');
+        if (!group.latestMentionedMeAt || mentionTime > group.latestMentionedMeAt) {
+          group.latestMentionedMeAt = mentionTime;
+        }
+      }
+      if (message.senderRole === 'parent') group.parentCount += 1;
+      if (message.senderRole === 'teacher') group.teacherCount += 1;
+      if (String(message.createdAt || '') > String((group.latest || {}).createdAt || '')) {
+        group.latest = message;
+      }
+      if (!group.studentName && message.studentName) group.studentName = message.studentName;
+      if (!group.studentNo && message.studentNo) group.studentNo = message.studentNo;
+      if (!group.studentRecordId && message.studentRecordId) group.studentRecordId = message.studentRecordId;
+    });
+    return Array.from(groups.values()).sort((a, b) =>
+      String((b.latest || {}).createdAt || '').localeCompare(String((a.latest || {}).createdAt || ''))
+    );
+  }
+
+  function normalizeName(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function normalizeEmail(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function currentTeacherIdentity() {
+    const user = state.auth.user || {};
+    return {
+      name: normalizeName(user.name),
+      email: normalizeEmail(user.email),
+    };
+  }
+
+  function messageMentionsMe(message) {
+    const mentions = Array.isArray(message.mentions) ? message.mentions : [];
+    if (!mentions.length) return false;
+    return mentions.some(mentionMatchesMe);
+  }
+
+  function mentionMatchesMe(mention) {
+    const me = currentTeacherIdentity();
+    const email = normalizeEmail(mention.email);
+    const name = normalizeName(mention.name);
+    return (me.email && email && me.email === email) || (me.name && name && me.name === name);
+  }
+
+  function isMessageFromCurrentTeacher(message) {
+    if (!message || message.senderRole !== 'teacher') return false;
+    const me = currentTeacherIdentity();
+    const senderEmail = normalizeEmail(message.senderEmail);
+    const senderName = normalizeName(message.senderName);
+    return (me.email && senderEmail && me.email === senderEmail) ||
+      (!senderEmail && me.name && senderName && me.name === senderName);
+  }
+
+  function teacherMessageSenderKey(message) {
+    const role = message && message.senderRole === 'teacher' ? 'teacher' : 'parent';
+    const email = normalizeEmail(message && message.senderEmail);
+    const name = normalizeName(message && message.senderName);
+    return [role, email || name || 'unknown'].join(':');
+  }
+
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function renderMessageBodyWithMentions(body, mentions) {
+    let html = escapeHtml(body || '');
+    const names = Array.from(new Set((Array.isArray(mentions) ? mentions : [])
+      .map((mention) => String(mention && mention.name ? mention.name : '').trim())
+      .filter(Boolean)))
+      .sort((a, b) => b.length - a.length);
+    if (!names.length) return html;
+    const escapedNames = names.map((name) => escapeHtml(name));
+    const pattern = new RegExp(`@(${escapedNames.map(escapeRegExp).join('|')})`, 'g');
+    return html.replace(pattern, '<span class="teacher-message-mention">@$1</span>');
+  }
+
+  function mentionedMeBadge(message) {
+    return messageMentionsMe(message) ? '<span class="teacher-message-mine-badge">提到我</span>' : '';
+  }
+
+  function formatMessageListTime(value) {
+    const text = String(value || '');
+    if (!text) return '';
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return formatStatsDateTime(text);
+    const today = todayDateString();
+    const messageDate = text.slice(0, 10);
+    if (messageDate === today) {
+      return new Intl.DateTimeFormat('zh-MY', {
+        timeZone: 'Asia/Kuala_Lumpur',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(date);
+    }
+    return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function teacherMessagePreviewText(message) {
+    const sender = message.senderLabel || message.senderName || (message.senderRole === 'teacher' ? '老师' : '家长');
+    const body = String(message.body || '').replace(/\s+/g, ' ').trim();
+    return `${sender}：${body || '留言'}`;
+  }
+
+  function dateTextIsAfter(left, right) {
+    const a = Date.parse(left || '');
+    const b = Date.parse(right || '');
+    if (!Number.isNaN(a) && !Number.isNaN(b)) return a > b;
+    if (Number.isNaN(a)) return false;
+    if (Number.isNaN(b)) return true;
+    return String(left || '') > String(right || '');
+  }
+
+  function teacherReadState(studentRecordId) {
+    return (state.teacherMessageReads || {})[studentRecordId] || {};
+  }
+
+  function hasUnreadMentionForGroup(group) {
+    if (!group.latestMentionedMeAt) return false;
+    const read = teacherReadState(group.studentRecordId || group.key);
+    const lastSeenAt = read.lastSeenAt || '';
+    if (!lastSeenAt) return true;
+    return dateTextIsAfter(group.latestMentionedMeAt, lastSeenAt);
+  }
+
+  function prepareTeacherMessageGroups(groups) {
+    return groups.map((group) => {
+      const latest = group.latest || {};
+      return Object.assign({}, group, {
+        mentionedMe: hasUnreadMentionForGroup(group),
+        lastSenderLabel: latest.senderLabel || latest.senderName || (latest.senderRole === 'teacher' ? '老师' : '家长'),
+        lastPreview: teacherMessagePreviewText(latest),
+        lastTimeText: formatMessageListTime(latest.createdAt || ''),
+      });
+    }).sort((a, b) => {
+      const rank = (group) => {
+        if (group.mentionedMe) return 0;
+        return 1;
+      };
+      const rankDiff = rank(a) - rank(b);
+      if (rankDiff) return rankDiff;
+      return String((b.latest || {}).createdAt || '').localeCompare(String((a.latest || {}).createdAt || ''));
+    });
+  }
+
+  function teacherMessageStatusPills(group) {
+    const pills = [];
+    if (group.mentionedMe) pills.push('<span class="teacher-message-pill mention">提到我</span>');
+    return pills.join('');
+  }
+
+  function renderTeacherMessages() {
+    setViewUi();
+    if (!elTeacherMessagesMeta || !elTeacherMessageList) return;
+    if (!isMessagesView()) return;
+    if (state.teacherMessagesLoading) {
+      elTeacherMessagesMeta.textContent = '正在载入家长留言…';
+      elTeacherMessageList.innerHTML = '<div class="teacher-stats-empty">正在载入留言…</div>';
+      return;
+    }
+    if (state.teacherMessagesError) {
+      elTeacherMessagesMeta.textContent = `留言读取失败：${state.teacherMessagesError}`;
+      elTeacherMessageList.innerHTML = '<div class="teacher-stats-empty">无法读取家长留言，请确认已登录并稍后再试。</div>';
+      return;
+    }
+    if (!state.teacherMessagesLoaded) {
+      setMessageChatOpen(false);
+      elTeacherMessagesMeta.textContent = '打开后载入留言…';
+      elTeacherMessageList.innerHTML = '<div class="teacher-stats-empty">还没有载入留言。</div>';
+      return;
+    }
+    const allGroups = prepareTeacherMessageGroups(groupedTeacherMessages());
+    if (!['all', 'mine'].includes(state.teacherMessagesFilter)) {
+      state.teacherMessagesFilter = 'all';
+    }
+    const groups = state.teacherMessagesFilter === 'mine'
+      ? allGroups.filter((group) => group.mentionedMe)
+      : allGroups;
+    const mentionCount = allGroups.filter((group) => group.mentionedMe).length;
+    if (elTeacherMessageFilterAll) {
+      elTeacherMessageFilterAll.classList.toggle('active', state.teacherMessagesFilter === 'all');
+      elTeacherMessageFilterAll.setAttribute('aria-pressed', state.teacherMessagesFilter === 'all' ? 'true' : 'false');
+    }
+    if (elTeacherMessageFilterMine) {
+      elTeacherMessageFilterMine.classList.toggle('active', state.teacherMessagesFilter === 'mine');
+      elTeacherMessageFilterMine.setAttribute('aria-pressed', state.teacherMessagesFilter === 'mine' ? 'true' : 'false');
+      elTeacherMessageFilterMine.textContent = `提到我 ${mentionCount ? mentionCount : ''}`.trim();
+    }
+    elTeacherMessagesMeta.textContent = `${allGroups.length} 个学生 · ${mentionCount} 个提到我`;
+    if (!groups.length) {
+      state.activeMessageStudentId = '';
+      setMessageChatOpen(false);
+      const emptyText = state.teacherMessagesFilter === 'mine'
+        ? '目前没有提到你的留言。'
+        : '目前还没有家长留言。';
+      elTeacherMessageList.innerHTML = `<div class="teacher-stats-empty">${emptyText}</div>`;
+      return;
+    }
+    const activeGroup = state.activeMessageStudentId
+      ? groups.find((group) => String(group.key) === String(state.activeMessageStudentId))
+      : null;
+    if (state.activeMessageStudentId && !activeGroup) state.activeMessageStudentId = '';
+    if (activeGroup) {
+      renderTeacherMessageConversation(activeGroup);
+      return;
+    }
+    setMessageChatOpen(false);
+    elTeacherMessageList.innerHTML = groups.map((group) => {
+      const latest = group.latest || {};
+      const student = studentLabelById(group.studentRecordId) || {};
+      const name = student.name || group.studentName || group.studentRecordId || '-';
+      const meta = [
+        group.studentNo ? `NO ${group.studentNo}` : (student.no ? `NO ${student.no}` : ''),
+        student.year || '',
+        student.block || '',
+        student.campus || '',
+        student.period || '',
+      ].filter(Boolean).join(' · ');
+      return `<button class="teacher-message-row" type="button" data-message-student="${escapeHtml(group.key)}">
+        <span class="teacher-message-row-main">
+          <strong class="teacher-message-row-title">${escapeHtml(name)}</strong>
+          <span class="teacher-message-row-preview">${escapeHtml(group.lastPreview)}</span>
+          <span class="teacher-message-row-meta">${escapeHtml(meta || '学生资料未匹配')} · ${escapeHtml(String(group.count))} 条记录</span>
+        </span>
+        <time class="teacher-message-time">${escapeHtml(group.lastTimeText)}</time>
+        <span class="teacher-message-row-status">${teacherMessageStatusPills(group)}</span>
+      </button>`;
+    }).join('');
+    elTeacherMessageList.querySelectorAll('[data-message-student]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const messageKey = btn.getAttribute('data-message-student') || '';
+        state.activeMessageStudentId = messageKey;
+        renderTeacherMessages();
+      });
+    });
+  }
+
+  function teacherMessageStudentMeta(group) {
+    const student = studentLabelById(group.studentRecordId) || {};
+    const name = student.name || group.studentName || group.studentRecordId || '-';
+    const parts = [
+      group.studentNo ? `NO ${group.studentNo}` : (student.no ? `NO ${student.no}` : ''),
+      student.year || '',
+      student.block || '',
+      student.campus || '',
+      student.period || '',
+    ].filter(Boolean);
+    return { name, meta: parts.join(' · ') || '学生资料未匹配' };
+  }
+
+  function messagesForStudentGroup(group) {
+    return (state.teacherMessages || [])
+      .filter((message) => {
+        const key = message.studentRecordId || message.studentNo || message.studentName || message.id;
+        return String(key || '') === String(group.key || '');
+      })
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  }
+
+  async function markTeacherConversationSeen(group, messages) {
+    const studentRecordId = group.studentRecordId || '';
+    if (!studentRecordId || !messages || !messages.length) return;
+    const latest = messages[messages.length - 1] || {};
+    const lastSeenAt = latest.createdAt || '';
+    if (!lastSeenAt) return;
+    const current = teacherReadState(studentRecordId);
+    if (current.lastSeenAt && !dateTextIsAfter(lastSeenAt, current.lastSeenAt)) return;
+    try {
+      const resp = await apiFetch('/api/teacher-messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentRecordId, lastSeenAt })
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      state.teacherMessageReads = Object.assign({}, state.teacherMessageReads || {}, {
+        [studentRecordId]: {
+          lastSeenAt: (data.readState && data.readState.lastSeenAt) || lastSeenAt,
+          updatedAt: (data.readState && data.readState.updatedAt) || '',
+        }
+      });
+    } catch (err) {
+      console.warn('mark teacher message read failed', err);
+    }
+  }
+
+  function renderTeacherMessageConversation(group) {
+    setMessageChatOpen(true);
+    updateKeyboardInset();
+    const student = teacherMessageStudentMeta(group);
+    const messages = messagesForStudentGroup(group);
+    markTeacherConversationSeen(group, messages);
+    elTeacherMessagesMeta.textContent = `${student.name} · ${group.count} 条留言`;
+    elTeacherMessageList.innerHTML = `<section class="teacher-message-chat">
+      <header class="teacher-message-chat-head">
+        <button class="teacher-message-back" type="button" data-message-back>‹</button>
+        <div>
+          <strong>${escapeHtml(student.name)}</strong>
+          <span>${escapeHtml(student.meta)}</span>
+        </div>
+      </header>
+      <div class="teacher-message-thread" id="teacher-message-thread">
+        <div class="teacher-message-stack">
+          ${messages.map((message, index) => {
+          const isMine = isMessageFromCurrentTeacher(message);
+          const role = message.senderRole === 'teacher' ? 'teacher' : 'parent';
+          const sender = message.senderLabel || message.senderName || (role === 'teacher' ? '老师' : '家长');
+          const previous = messages[index - 1];
+          const sameSender = previous && teacherMessageSenderKey(previous) === teacherMessageSenderKey(message);
+          const bubbleClass = [
+            'teacher-message-bubble',
+            isMine ? 'mine' : 'incoming',
+            role === 'teacher' && !isMine ? 'other-teacher' : '',
+            sameSender ? 'compact' : '',
+          ].filter(Boolean).join(' ');
+          return `<article class="${bubbleClass}">
+            <strong class="teacher-message-sender">${escapeHtml(sender)}</strong>
+            ${mentionedMeBadge(message)}
+            <p>${renderMessageBodyWithMentions(message.body || '', message.mentions)}</p>
+            <time class="teacher-message-time">${escapeHtml(formatStatsDateTime(message.createdAt || ''))}</time>
+          </article>`;
+        }).join('')}
+        </div>
+      </div>
+      <div class="teacher-message-compose">
+        <textarea id="teacher-message-input" rows="1" placeholder="回复家长留言"></textarea>
+        <button id="teacher-message-send" type="button">发送</button>
+      </div>
+      <div class="teacher-message-send-status" id="teacher-message-send-status"></div>
+    </section>`;
+    scrollTeacherMessageThread();
+    const back = elTeacherMessageList.querySelector('[data-message-back]');
+    const input = document.getElementById('teacher-message-input');
+    const sendBtn = document.getElementById('teacher-message-send');
+    if (back) {
+      back.addEventListener('click', () => {
+        state.activeMessageStudentId = '';
+        setMessageChatOpen(false);
+        renderTeacherMessages();
+      });
+    }
+    if (input) {
+      input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = `${Math.min(input.scrollHeight, 96)}px`;
+        scrollTeacherMessageThread();
+      });
+      input.addEventListener('focus', () => {
+        updateKeyboardInset();
+        scrollTeacherMessageThread();
+      });
+      input.addEventListener('blur', () => window.setTimeout(updateKeyboardInset, 80));
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          sendTeacherConversationMessage(group);
+        }
+      });
+    }
+    if (sendBtn) sendBtn.addEventListener('click', () => sendTeacherConversationMessage(group));
+  }
+
+  async function sendTeacherConversationMessage(group) {
+    const input = document.getElementById('teacher-message-input');
+    const sendBtn = document.getElementById('teacher-message-send');
+    const status = document.getElementById('teacher-message-send-status');
+    const body = input ? input.value.trim() : '';
+    if (!body) {
+      if (status) status.textContent = '请先输入回复内容。';
+      return;
+    }
+    if (!group.studentRecordId) {
+      if (status) status.textContent = '这个留言缺少学生绑定，暂时不能回复。';
+      return;
+    }
+    if (sendBtn) sendBtn.disabled = true;
+    if (status) status.textContent = '发送中…';
+    try {
+      const student = teacherMessageStudentMeta(group);
+      const resp = await apiFetch('/api/teacher-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentRecordId: group.studentRecordId,
+          studentNo: group.studentNo,
+          studentName: group.studentName || student.name,
+          body
+        })
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      if (input) {
+        input.value = '';
+        input.style.height = 'auto';
+      }
+      if (data.message) {
+        state.teacherMessages = [data.message].concat(state.teacherMessages || []);
+      } else {
+        state.teacherMessagesLoaded = false;
+        await loadTeacherMessages(true);
+      }
+      if (status) status.textContent = '已发送';
+      renderTeacherMessages();
+    } catch (err) {
+      if (status) status.textContent = `发送失败：${err.message}`;
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
+    }
+  }
+
+  async function loadTeacherMessages(forceRefresh = false) {
+    if (!isMessagesView()) return;
+    if (!forceRefresh && state.teacherMessagesLoaded) {
+      renderTeacherMessages();
+      return;
+    }
+    state.teacherMessagesLoading = true;
+    state.teacherMessagesError = '';
+    renderTeacherMessages();
+    try {
+      const resp = await apiFetch(`/api/teacher-messages?t=${Date.now()}`, { cache: 'no-store' });
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { throw new Error('返回非 JSON 数据'); }
+      if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
+      state.teacherMessages = data.messages || [];
+      state.teacherMessageReads = data.readStates || {};
+      state.teacherMessagesLoaded = true;
+    } catch (err) {
+      state.teacherMessagesError = err.message;
+    } finally {
+      state.teacherMessagesLoading = false;
+      renderTeacherMessages();
     }
   }
 
@@ -1142,10 +1739,12 @@
   }
 
   function switchView(view) {
-    state.currentView = view === 'settings' ? 'settings' : (view === 'stats' ? 'stats' : 'attendance');
+    state.currentView = view === 'settings' ? 'settings' : (view === 'messages' ? 'messages' : (view === 'stats' ? 'stats' : 'attendance'));
     setViewUi();
     if (isStatsView()) {
       loadTeacherStats(false);
+    } else if (isMessagesView()) {
+      loadTeacherMessages(false);
     } else if (isSettingsView()) {
       renderAttendanceStatusPanels(filteredAttendanceStudents());
     } else {
@@ -1675,6 +2274,20 @@
             <input id="attendance-modal-note" type="text" value="${escapeHtml(record.note || '')}" placeholder="备注" />
           </label>
         </div>
+        <section class="parent-message-box" aria-label="家长留言">
+          <div class="parent-message-head">
+            <span>家长留言</span>
+            <span>文字回复</span>
+          </div>
+          <div class="parent-message-thread" id="parent-message-thread">
+            <div class="attendance-empty">正在读取留言…</div>
+          </div>
+          <form class="parent-message-form" id="parent-message-form">
+            <textarea id="parent-message-input" maxlength="1200" placeholder="回复家长"></textarea>
+            <button id="parent-message-send" type="submit">发送</button>
+            <div class="parent-message-status" id="parent-message-status"></div>
+          </form>
+        </section>
         <div class="actions">
           <button id="modal-close" type="button">关闭</button>
           <button id="attendance-modal-save" class="primary" type="button">套用修改</button>
@@ -1727,6 +2340,14 @@
         closeModal();
       });
     }
+    const messageForm = document.getElementById('parent-message-form');
+    if (messageForm) {
+      messageForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        sendTeacherMessage(rec);
+      });
+    }
+    loadParentMessagesForModal(attendanceStudentId(rec));
   }
 
   function bindModalCommon() {
@@ -1827,6 +2448,8 @@
       if (document.hidden || state.modalOpen) return;
       if (isStatsView()) {
         loadTeacherStats(false);
+      } else if (isMessagesView()) {
+        loadTeacherMessages(true);
       } else {
         loadStudents(false);
         loadAttendance(false);
@@ -1843,6 +2466,8 @@
     function refreshCurrentView() {
       if (isStatsView()) {
         loadTeacherStats(true);
+      } else if (isMessagesView()) {
+        loadTeacherMessages(true);
       } else {
         loadStudents(false, true);
         loadAttendance(false, true);
@@ -1853,6 +2478,9 @@
     if (elMobileRefresh) elMobileRefresh.addEventListener('click', refreshCurrentView);
     if (elViewAttendance) {
       elViewAttendance.addEventListener('click', () => switchView('attendance'));
+    }
+    if (elViewMessages) {
+      elViewMessages.addEventListener('click', () => switchView('messages'));
     }
     if (elViewStats) {
       elViewStats.addEventListener('click', () => switchView('stats'));
@@ -1908,6 +2536,25 @@
         loadTeacherStats(true);
       });
     }
+    if (elTeacherMessagesRefresh) {
+      elTeacherMessagesRefresh.addEventListener('click', () => {
+        loadTeacherMessages(true);
+      });
+    }
+    if (elTeacherMessageFilterAll) {
+      elTeacherMessageFilterAll.addEventListener('click', () => {
+        state.teacherMessagesFilter = 'all';
+        state.activeMessageStudentId = '';
+        renderTeacherMessages();
+      });
+    }
+    if (elTeacherMessageFilterMine) {
+      elTeacherMessageFilterMine.addEventListener('click', () => {
+        state.teacherMessagesFilter = 'mine';
+        state.activeMessageStudentId = '';
+        renderTeacherMessages();
+      });
+    }
     if (elUnfinishedStep) {
       elUnfinishedStep.value = state.unfinishedStep;
       elUnfinishedStep.addEventListener('change', () => {
@@ -1931,6 +2578,14 @@
       state.teacherStats = null;
       state.teacherStatsLoadedKey = '';
       state.teacherStatsError = '';
+      state.teacherMessagesLoaded = false;
+      state.teacherMessages = [];
+      state.teacherMessageReads = {};
+      state.teacherMessagesError = '';
+      state.activeMessageStudentId = '';
+      state.teacherMessagesFilter = 'all';
+      setMessageChatOpen(false);
+      updateKeyboardInset();
       stopAutoRefresh();
       if (window.google && window.google.accounts && window.google.accounts.id) {
         window.google.accounts.id.disableAutoSelect();
@@ -1990,12 +2645,19 @@
     const canStart = await checkAuth();
     if (canStart) startAppData();
     window.addEventListener('resize', syncShellMode);
+    window.addEventListener('resize', updateKeyboardInset);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateKeyboardInset);
+      window.visualViewport.addEventListener('scroll', updateKeyboardInset);
+    }
     const displayMode = window.matchMedia('(display-mode: standalone)');
     if (displayMode.addEventListener) displayMode.addEventListener('change', syncShellMode);
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
         if (isStatsView()) {
           loadTeacherStats(false);
+        } else if (isMessagesView()) {
+          loadTeacherMessages(false);
         } else {
           loadStudents(false);
           loadAttendance(false);

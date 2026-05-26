@@ -65,8 +65,14 @@ def get_env():
         "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_ATTENDANCE_TABLE",
         "SUPABASE_ATTENDANCE_EVENTS_TABLE",
+        "SUPABASE_SCORE_EVENTS_TABLE",
+        "SUPABASE_PARENT_PUSH_TABLE",
+        "SUPABASE_PARENT_NOTIFICATION_TABLE",
+        "SUPABASE_PARENT_MESSAGES_TABLE",
         "ATTENDANCE_PRIMARY_STORE",
         "ATTENDANCE_SYNC_LARK",
+        "GOOGLE_CLIENT_ID",
+        "AUTH_SESSION_SECRET",
     ):
         optional_value = os.environ.get(optional_key)
         if optional_value:

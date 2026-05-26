@@ -3,7 +3,30 @@
   "framework": null,
   "buildCommand": null,
   "outputDirectory": ".",
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "pwa-lark-daycare-attendance.vercel.app"
+        }
+      ],
+      "destination": "/attendance.html",
+      "permanent": false
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "pwa-lark-daycare-attendance.vercel.app"
+        }
+      ],
+      "destination": "/attendance.html"
+    },
     {
       "source": "/",
       "has": [

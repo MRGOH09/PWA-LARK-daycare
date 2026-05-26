@@ -12,15 +12,16 @@
 <style>
   :root {
     --bg: #e7f0ec;
-    --panel: #ffffff;
+    --panel: #fff;
     --panel-2: #f6fbf8;
     --text: #10231f;
     --muted: #60706b;
     --line: #cbdad5;
     --brand: #075e54;
     --brand-2: #128c7e;
-    --bubble: #dcf8c6;
-    --bubble-2: #ffffff;
+    --good: #0f766e;
+    --soft: #e0f2ee;
+    --bubble: #fff;
     --score: #f59e0b;
     --bad: #b91c1c;
   }
@@ -62,61 +63,58 @@
     min-height: 100dvh;
     display: grid;
     grid-template-rows: auto 1fr;
+    background: var(--bg);
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
   }
   header.top {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-    align-items: center;
-    padding: 14px 18px;
+    gap: 10px;
+    padding: 14px 14px 10px;
     padding-top: max(14px, env(safe-area-inset-top));
     background: var(--brand);
     color: #fff;
   }
-  header.top h1 { margin: 0; font-size: 20px; }
-  header.top p { margin: 3px 0 0; color: rgba(255, 255, 255, 0.75); font-size: 12px; }
-  .top-actions { display: flex; gap: 8px; align-items: center; }
+  header.top h1 { margin: 0; font-size: 22px; }
+  header.top p { margin: 2px 0 0; color: rgba(255, 255, 255, 0.75); font-size: 12px; }
+  .top-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
   .top-actions select,
   .top-actions button {
-    min-height: 34px;
+    min-height: 36px;
     border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 6px;
+    border-radius: 8px;
     background: rgba(255, 255, 255, 0.12);
     color: #fff;
-    padding: 6px 10px;
-    font-weight: 800;
+    padding: 6px 9px;
+    font-weight: 900;
   }
   .top-actions select option { color: var(--text); }
-  .layout {
-    min-height: 0;
-    display: grid;
-    grid-template-columns: 300px minmax(0, 1fr);
-  }
-  aside.children {
-    min-height: 0;
-    overflow: auto;
-    border-right: 1px solid var(--line);
+  .app-body { min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto 1fr; }
+  .child-switcher {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
     background: var(--panel);
   }
-  .child-list-head {
-    padding: 14px;
-    border-bottom: 1px solid var(--line);
-  }
-  .child-list-head strong { display: block; }
-  .child-list-head span { color: var(--muted); font-size: 12px; }
   .child-card {
-    width: 100%;
+    min-width: 190px;
     display: grid;
     grid-template-columns: 42px minmax(0, 1fr);
     gap: 10px;
     align-items: center;
-    border: 0;
-    border-bottom: 1px solid var(--line);
-    background: transparent;
-    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    padding: 10px 12px;
     text-align: left;
   }
-  .child-card.active { background: var(--panel-2); }
+  .child-card.active { background: var(--soft); border-color: var(--brand-2); }
   .avatar {
     width: 42px;
     height: 42px;
@@ -135,48 +133,77 @@
     white-space: nowrap;
   }
   .child-card span { margin-top: 3px; color: var(--muted); font-size: 12px; }
-  main.chat {
-    min-width: 0;
-    min-height: 0;
+  main.app-main { min-height: 0; overflow: auto; }
+  html[data-parent-tab="messages"] main.app-main {
     display: grid;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
   }
   .chat-head {
     display: flex;
     gap: 12px;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--line);
     background: var(--panel);
   }
-  .chat-title strong { display: block; font-size: 17px; }
+  .chat-title strong { display: block; font-size: 18px; }
   .chat-title span { color: var(--muted); font-size: 12px; }
   .notify-btn {
-    min-height: 36px;
+    min-height: 38px;
     border: 0;
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--brand-2);
     color: #fff;
     padding: 7px 12px;
     font-weight: 900;
   }
-  .score-strip {
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  #messages-panel.active {
+    min-height: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-    padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.58);
-    border-bottom: 1px solid var(--line);
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
   }
-  .score-card {
+  .today-panel { padding: 12px 14px 20px; }
+  .today-card {
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--panel);
-    padding: 9px 10px;
+    padding: 12px;
+    margin-bottom: 10px;
   }
-  .score-card span { display: block; color: var(--muted); font-size: 11px; }
-  .score-card strong { display: block; margin-top: 2px; color: var(--score); font-size: 19px; }
+  .today-card h2 { margin: 0; font-size: 18px; }
+  .today-card p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .status-card {
+    min-height: 96px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 10px;
+  }
+  .status-card.done { border-color: rgba(18, 140, 126, 0.42); background: #f1fbf7; }
+  .status-card.pending { color: var(--muted); }
+  .status-label { font-size: 12px; color: var(--muted); }
+  .status-value { margin-top: 5px; font-size: 17px; font-weight: 900; color: var(--text); }
+  .status-meta { margin-top: 6px; font-size: 11px; color: var(--muted); line-height: 1.35; }
+  .quick-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .quick-actions button {
+    flex: 1;
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--brand);
+    font-weight: 900;
+  }
   .feed {
     min-height: 0;
     overflow: auto;
@@ -184,6 +211,13 @@
     background:
       linear-gradient(rgba(231, 240, 236, 0.92), rgba(231, 240, 236, 0.92)),
       repeating-linear-gradient(45deg, rgba(7, 94, 84, 0.08) 0 1px, transparent 1px 16px);
+  }
+  .feed-stack {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 10px;
   }
   .day-divider {
     width: max-content;
@@ -196,33 +230,240 @@
     font-size: 12px;
   }
   .message {
-    max-width: min(620px, 92%);
-    margin: 10px 0;
+    max-width: min(620px, 82%);
+    margin: 0;
     border-radius: 8px;
-    background: var(--bubble-2);
-    padding: 9px 10px 7px;
+    background: var(--bubble);
+    padding: 9px 11px 7px;
     box-shadow: 0 1px 2px rgba(15, 35, 31, 0.12);
   }
-  .message.score { background: var(--bubble); margin-left: auto; }
+  .message.score { background: #dcf8c6; }
+  .message.parent-message { background: #fff; }
+  .message.parent-message.mine {
+    margin-left: auto;
+    background: #dcf8c6;
+  }
+  .message.parent-message.pending {
+    opacity: 0.82;
+  }
+  .message.parent-message.teacher {
+    border-left: 4px solid var(--brand-2);
+  }
   .message.negative { border-left: 4px solid var(--bad); }
-  .message-meta {
+  .message-sender {
+    display: block;
+    margin: 0 0 4px;
+    color: var(--brand);
+    font-size: 14px;
+    line-height: 1.15;
+    font-weight: 900;
+  }
+  .message.parent-message.mine .message-sender { color: #2563eb; }
+  .message p {
+    margin: 5px 0 0;
+    font-size: 16px;
+    line-height: 1.38;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .message-time {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: right;
+  }
+  .message-composer {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+    align-items: end;
+    padding: 6px 9px calc(6px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: #f1f5f9;
+  }
+  .message-composer textarea {
+    width: 100%;
+    min-height: 38px;
+    max-height: 96px;
+    resize: none;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 16px;
+    line-height: 1.35;
+  }
+  .message-composer button {
+    min-width: 58px;
+    min-height: 38px;
+    border: 0;
+    border-radius: 999px;
+    background: #16a34a;
+    color: #fff;
+    padding: 0 14px;
+    font-size: 14px;
+    font-weight: 900;
+  }
+  .message-composer button:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+  .composer-status {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .composer-status:empty { display: none; }
+  .mention-menu {
+    position: absolute;
+    left: 10px;
+    right: 78px;
+    bottom: calc(100% + 6px);
+    z-index: 4;
+    display: grid;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 12px 32px rgba(15, 35, 31, 0.16);
+  }
+  .mention-menu button {
     display: flex;
-    align-items: center;
     justify-content: space-between;
     gap: 10px;
+    min-height: 42px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: #ffffff;
+    color: var(--text);
+    padding: 8px 10px;
+    text-align: left;
+  }
+  .mention-menu button:last-child { border-bottom: 0; }
+  .mention-menu strong {
+    font-size: 14px;
+    color: var(--brand);
+  }
+  .mention-menu span,
+  .mention-empty {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .mention-empty { padding: 10px; }
+  .score-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.58);
+    border-bottom: 1px solid var(--line);
+  }
+  .tier-hero {
+    grid-column: 1 / -1;
+    border: 1px solid rgba(245, 158, 11, 0.42);
+    border-radius: 8px;
+    background: linear-gradient(135deg, #fff7ed, #ecfeff);
+    padding: 14px;
+  }
+  .tier-hero span,
+  .score-card span {
+    display: block;
     color: var(--muted);
     font-size: 11px;
   }
-  .message-meta strong {
-    min-width: 0;
+  .tier-hero strong {
+    display: block;
+    margin-top: 3px;
+    color: var(--score);
+    font-size: 30px;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+  .tier-hero p {
+    margin: 6px 0 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .tier-progress {
+    height: 10px;
+    margin-top: 12px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--brand);
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.16);
+  }
+  .tier-progress span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #f59e0b, #14b8a6);
+  }
+  .score-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 10px;
+  }
+  .score-card strong { display: block; margin-top: 2px; color: var(--score); font-size: 19px; }
+  .score-history {
+    display: grid;
+    gap: 0;
+    padding: 12px 14px 18px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+  }
+  .score-history-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: baseline;
+    padding: 2px 0 8px;
+  }
+  .score-history-head strong { font-size: 16px; }
+  .score-history-head span {
+    color: var(--muted);
     font-size: 12px;
   }
-  .message p { margin: 4px 0 0; line-height: 1.45; }
-  .message time { flex: 0 0 auto; }
+  .score-event {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-width: 0;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+  }
+  .score-event > strong {
+    flex: 0 0 58px;
+    color: var(--good);
+    font-size: 18px;
+  }
+  .score-event.negative > strong { color: var(--bad); }
+  .score-event div { min-width: 0; }
+  .score-event p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .score-event span {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .children-page { padding: 10px 14px 20px; }
+  .child-list-head { padding: 8px 2px 10px; }
+  .child-list-head strong { display: block; }
+  .child-list-head span { color: var(--muted); font-size: 12px; }
+  .children-page .child-card { width: 100%; margin-bottom: 8px; }
   .empty {
     margin: 24px auto;
     max-width: 420px;
@@ -232,49 +473,67 @@
     color: var(--muted);
     text-align: center;
   }
-  .rankings {
+  .bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
     display: grid;
-    gap: 8px;
-    padding: 10px 16px 16px;
-    background: var(--panel);
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 7px 8px;
+    padding-bottom: max(7px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 -8px 24px rgba(15, 35, 31, 0.08);
   }
-  .ranking-tabs { display: flex; gap: 8px; }
-  .ranking-tabs button {
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel-2);
-    padding: 6px 10px;
-    font-weight: 800;
+  .bottom-nav button {
+    min-height: 44px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 900;
   }
-  .ranking-tabs button.active {
-    background: var(--brand);
-    color: #fff;
-    border-color: var(--brand);
+  .bottom-nav button.active { background: var(--soft); color: var(--brand); }
+  html[data-parent-compose="open"] body {
+    overflow: hidden;
   }
-  .ranking-row {
-    display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) 72px;
-    gap: 8px;
-    align-items: center;
-    padding: 7px 0;
-    border-top: 1px solid var(--line);
-    font-size: 13px;
+  html[data-parent-compose="open"] .shell {
+    height: var(--visual-height, 100dvh);
+    min-height: 0;
+    grid-template-rows: auto 1fr;
+    padding-bottom: 0;
   }
-  .ranking-row.own { color: var(--brand); font-weight: 900; }
-  @media (max-width: 800px) {
-    .layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
-    aside.children {
-      display: flex;
-      overflow-x: auto;
-      border-right: 0;
-      border-bottom: 1px solid var(--line);
-    }
-    .child-list-head { min-width: 150px; border-bottom: 0; border-right: 1px solid var(--line); }
-    .child-card { min-width: 210px; border-bottom: 0; border-right: 1px solid var(--line); }
-    .score-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    header.top { grid-template-columns: 1fr; }
-    .top-actions { justify-content: space-between; }
+  html[data-parent-compose="open"] .bottom-nav {
+    display: none;
+  }
+  html[data-parent-compose="open"] .app-body {
+    min-height: 0;
+  }
+  html[data-parent-compose="open"] .child-switcher {
+    display: none;
+  }
+  html[data-parent-compose="open"] .chat-head {
+    min-height: 58px;
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+  html[data-parent-compose="open"] #messages-panel.active {
+    min-height: 0;
+  }
+  html[data-parent-compose="open"] .feed {
+    padding: 12px 12px 8px;
+    scroll-padding-bottom: 12px;
+  }
+  @media (min-width: 900px) {
+    .shell { max-width: 980px; margin: 0 auto; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+    .bottom-nav { max-width: 980px; margin: 0 auto; }
+    .status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .score-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    header.top { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+    .top-actions { grid-template-columns: auto auto auto auto; }
   }
 </style>
 </head>
@@ -304,36 +563,49 @@
       <button id="sign-out" type="button">退出</button>
     </div>
   </header>
-  <div class="layout">
-    <aside class="children">
-      <div class="child-list-head">
-        <strong>我的孩子</strong>
-        <span id="children-meta">加载中…</span>
-      </div>
-      <div id="children-list"></div>
-    </aside>
-    <main class="chat">
+  <div class="app-body">
+    <div class="child-switcher" id="children-list"></div>
+    <main class="app-main">
       <section class="chat-head">
         <div class="chat-title">
           <strong id="active-child-name">请选择孩子</strong>
-          <span id="active-child-meta">点名动态和分数会显示在这里</span>
+          <span id="active-child-meta">今天状态会显示在这里</span>
         </div>
         <button class="notify-btn" id="notify-btn" type="button">开启通知</button>
       </section>
-      <section class="score-strip" id="score-strip"></section>
-      <section class="feed" id="feed"></section>
-      <section class="rankings">
-        <div class="ranking-tabs">
-          <button type="button" data-ranking="week" class="active">本周</button>
-          <button type="button" data-ranking="month">本月</button>
-          <button type="button" data-ranking="all">永久</button>
+      <section class="tab-panel today-panel active" id="today-panel">
+        <div id="today-dashboard"></div>
+      </section>
+      <section class="tab-panel" id="messages-panel">
+        <section class="feed" id="feed"></section>
+        <form class="message-composer" id="message-form">
+          <div class="mention-menu" id="mention-menu" hidden></div>
+          <textarea id="message-input" maxlength="1200" placeholder="输入给老师的留言"></textarea>
+          <button id="message-send" type="submit">发送</button>
+          <div class="composer-status" id="message-status"></div>
+        </form>
+      </section>
+      <section class="tab-panel" id="stars-panel">
+        <section class="score-strip" id="score-strip"></section>
+        <section class="score-history" id="score-history"></section>
+      </section>
+      <section class="tab-panel children-page" id="children-panel">
+        <div class="child-list-head">
+          <strong>我的孩子</strong>
+          <span id="children-meta">加载中…</span>
         </div>
-        <div id="ranking-list"></div>
+        <div id="children-page-list"></div>
       </section>
     </main>
   </div>
+  <nav class="bottom-nav" aria-label="底部导航">
+    <button class="active" type="button" data-tab="today">今天</button>
+    <button type="button" data-tab="messages">留言</button>
+    <button type="button" data-tab="stars">Noble Star</button>
+    <button type="button" data-tab="children">我的孩子</button>
+  </nav>
 </div>
 
-<script src="js/parent.js?v=parent-v4"></script>
+<script src="js/parent.js?v=parent-v16"></script>
 </body>
 </html>

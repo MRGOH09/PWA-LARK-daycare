@@ -21,10 +21,21 @@ from _supabase import (  # noqa: E402
     fetch_attendance_events,
     fetch_attendance_row as fetch_supabase_attendance_row,
     fetch_attendance_rows as fetch_supabase_attendance_rows,
+    fetch_parent_push_subscriptions,
     insert_attendance_events,
+    update_parent_notification_status,
+    upsert_parent_notification_event,
+    upsert_score_event,
     supabase_enabled,
     upsert_attendance_row,
 )
+from _parent import (  # noqa: E402
+    fetch_child_by_record_id,
+    is_positive_attendance,
+    parent_copy_for_attendance,
+    positive_score_reason,
+)
+from _webpush import send_web_push, webpush_configured  # noqa: E402
 
 
 TZ = timezone(timedelta(hours=8))
@@ -401,6 +412,106 @@ def attendance_events_from_change(old_record, new_record, actor=None):
     return events
 
 
+def auto_score_rows_from_events(events, student, actor=None):
+    actor = actor or {}
+    student = student or {}
+    rows = []
+    for event in events:
+        step_key = clean_text(event.get("step_key"))
+        new_value = clean_text(event.get("new_value"))
+        attendance_event_id = clean_text(event.get("id"))
+        if not attendance_event_id or not is_positive_attendance(step_key, new_value):
+            continue
+        rows.append({
+            "student_record_id": clean_text(event.get("student_record_id")),
+            "student_no": clean_text(student.get("no")),
+            "student_name": clean_text(student.get("name")),
+            "date": clean_text(event.get("date")) or today_date(),
+            "points": 0.5,
+            "reason_key": f"attendance:{step_key}:{new_value}",
+            "reason_label": f"点名：{positive_score_reason(step_key, new_value)}",
+            "note": "",
+            "source": "attendance_auto",
+            "attendance_event_id": attendance_event_id,
+            "actor_email": clean_text(actor.get("email")).lower(),
+            "actor_name": clean_text(actor.get("name")),
+            "visible_to_parent": True,
+            "push_to_parent": True,
+        })
+    return rows
+
+
+def notification_events_from_attendance(env, events):
+    if not events or not webpush_configured(env):
+        return []
+    student_record_id = clean_text(events[0].get("student_record_id"))
+    child = fetch_child_by_record_id(env, student_record_id) or {}
+    language = child.get("language") or "zh"
+    child_name = child.get("studentName") or clean_text(events[0].get("student_name")) or "宝贝"
+    parent_emails = sorted(set((child.get("fatherEmails") or []) + (child.get("motherEmails") or [])))
+    if not parent_emails:
+        return []
+
+    summaries = []
+    source_ids = []
+    teacher = ""
+    for event in events:
+        step_key = clean_text(event.get("step_key"))
+        new_value = clean_text(event.get("new_value"))
+        if not teacher:
+            teacher = clean_text(event.get("actor_name")) or clean_text(event.get("actor_email"))
+        message = parent_copy_for_attendance(step_key, new_value, child_name, language)
+        if step_key == "note":
+            note = clean_text(new_value)
+            summary = note
+        elif message:
+            summary = positive_score_reason(step_key, new_value)
+        else:
+            continue
+        if summary and summary not in summaries:
+            summaries.append(summary)
+        source_ids.append(clean_text(event.get("id")) or f"{step_key}:{new_value}")
+    if not summaries:
+        return []
+
+    title = teacher or ("Teacher" if language == "en" else "老师")
+    if len(summaries) == 1:
+        body = f"{child_name}: {summaries[0]}" if language == "en" else f"{child_name}：{summaries[0]}"
+    else:
+        joiner = ", " if language == "en" else "、"
+        body = f"{child_name}: {joiner.join(summaries[:6])}" if language == "en" else f"{child_name}：{joiner.join(summaries[:6])}"
+        if len(summaries) > 6:
+            body += f" +{len(summaries) - 6}"
+    source_id = ",".join(source_ids)[:300]
+
+    results = []
+    for parent_email in parent_emails:
+        notification = upsert_parent_notification_event(env, {
+            "source_type": "attendance_batch",
+            "source_id": source_id,
+            "student_record_id": student_record_id,
+            "parent_email": parent_email,
+            "title": title,
+            "body": body,
+            "language": language,
+            "push_status": "pending",
+            "push_error": "",
+        })
+        sent_count = 0
+        errors = []
+        for subscription in fetch_parent_push_subscriptions(env, parent_email):
+            try:
+                send_web_push(env, subscription, title, body, "/parent.html")
+                sent_count += 1
+            except Exception as exc:
+                errors.append(str(exc)[:180])
+        status = "sent" if sent_count else "failed"
+        error_text = "; ".join(errors[:2])
+        update_parent_notification_status(env, notification.get("id"), status, error_text)
+        results.append({"parentEmail": parent_email, "status": status, "sentCount": sent_count, "error": error_text})
+    return results
+
+
 def save_lark_attendance(env, date_text, student_record_id, fields):
     if not env.get("LARK_ATTENDANCE_TABLE_ID"):
         raise RuntimeError("Missing LARK_ATTENDANCE_TABLE_ID")
@@ -484,11 +595,16 @@ class handler(BaseHTTPRequestHandler):
                 action = "updated" if existing_row else "created"
                 duplicate_count = 1 if existing_row else 0
                 sync_warnings = []
+                inserted_events = []
+                parent_notifications = []
                 try:
                     inserted_events = insert_attendance_events(env, attendance_events_from_change(existing_record, intended_record, actor))
                     intended_record = apply_event_overrides([intended_record], inserted_events)[0]
+                    for score_row in auto_score_rows_from_events(inserted_events, body.get("student") or {}, actor):
+                        upsert_score_event(env, score_row)
+                    parent_notifications = notification_events_from_attendance(env, inserted_events)
                 except Exception as exc:
-                    sync_warnings.append(f"Supabase event log failed: {exc}")
+                    sync_warnings.append(f"Supabase event/score log failed: {exc}")
 
                 lark_sync = None
                 if should_sync_lark(env):
@@ -504,6 +620,7 @@ class handler(BaseHTTPRequestHandler):
                     "duplicateCount": duplicate_count,
                     "record": intended_record,
                     "larkSync": lark_sync,
+                    "parentNotifications": parent_notifications,
                     "syncWarnings": sync_warnings,
                 })
             else:
