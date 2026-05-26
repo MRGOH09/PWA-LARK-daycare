@@ -707,8 +707,11 @@
   }
 
   function filteredAttendanceStudents() {
-    const list = baseFilteredAttendanceStudents();
-    return state.showUnfinishedOnly ? list.filter(isAttendanceUnfinished) : list;
+    let list = baseFilteredAttendanceStudents();
+    if (state.showUnfinishedOnly) list = list.filter(isAttendanceUnfinished);
+    const q = normalizedAttendanceSearch();
+    if (q) list = list.filter((rec) => attendanceSearchHaystack(rec).includes(q));
+    return list;
   }
 
   function renderAttendanceSummary(list) {
@@ -791,13 +794,17 @@
     ].join(' ').toLowerCase();
   }
 
+  function normalizedAttendanceSearch() {
+    return state.attendanceSearch.trim().toLowerCase();
+  }
+
   function searchMatchesStudent(rec) {
-    const q = state.attendanceSearch.trim().toLowerCase();
+    const q = normalizedAttendanceSearch();
     return Boolean(q && attendanceSearchHaystack(rec).includes(q));
   }
 
   function firstSearchMatch(list) {
-    const q = state.attendanceSearch.trim().toLowerCase();
+    const q = normalizedAttendanceSearch();
     if (!q) return null;
     return list.find((rec) => attendanceSearchHaystack(rec).includes(q)) || null;
   }
@@ -811,19 +818,17 @@
       state.attendanceFilters.year || '全部年级',
       state.attendanceFilters.block || '全部 BLOCK',
       state.attendanceFilters.campus || '全部地点',
-      state.attendanceFilters.time || '全部时间段',
-      `${list.length}人`
+      state.attendanceFilters.time || '全部时间段'
     ];
     if (state.showUnfinishedOnly) parts.push(`${unfinishedStepLabel()}未点 ${unfinishedCount}/${baseCount}`);
-    const matched = firstSearchMatch(list);
     const q = state.attendanceSearch.trim();
     const searchText = q
-      ? (matched
-        ? ` · 已定位 ${studentValue(matched, STUDENT_FIELDS.name) || studentValue(matched, STUDENT_FIELDS.no) || q}`
+      ? (list.length
+        ? ` · 搜索「${q}」：${list.length} 人`
         : ` · 找不到「${q}」`)
       : '';
     elAttendanceCurrentRange.textContent = parts.join(' · ') + searchText;
-    elAttendanceCurrentRange.classList.toggle('no-match', Boolean(q && !matched));
+    elAttendanceCurrentRange.classList.toggle('no-match', Boolean(q && !list.length));
   }
 
   function attendanceSyncLabel() {
@@ -1355,7 +1360,7 @@
     const rows = yearGroup.rows;
     const marked = rows.map(attendanceRecordFor).filter(isAttendanceMarked).length;
     const colspan = ATTENDANCE_STEPS.length + 1;
-    const collapsed = isAttendanceYearCollapsed(yearGroup.year);
+    const collapsed = normalizedAttendanceSearch() ? false : isAttendanceYearCollapsed(yearGroup.year);
     const stateText = collapsed ? '已收起' : `${yearGroup.groups.length} 个 Block`;
     return `<tr class="attendance-grade-row ${collapsed ? 'is-collapsed' : ''}" data-att-year-key="${escapeHtml(yearGroup.key)}" data-att-year-label="${escapeHtml(yearGroup.year)}">
       <th scope="rowgroup">
@@ -1376,7 +1381,7 @@
       const cell = row.querySelector('td');
       const button = row.querySelector('[data-att-toggle-year]');
       const caret = row.querySelector('.attendance-grade-caret');
-      const collapsed = isAttendanceYearCollapsed(yearGroup.year);
+      const collapsed = normalizedAttendanceSearch() ? false : isAttendanceYearCollapsed(yearGroup.year);
       const marked = yearGroup.rows.map(attendanceRecordFor).filter(isAttendanceMarked).length;
       if (cell) {
         const stateText = collapsed ? '已收起' : `${yearGroup.groups.length} 个 Block`;
@@ -1399,11 +1404,16 @@
     if (!elAttendanceList) return;
     const list = filteredAttendanceStudents();
     elAttendanceList.querySelectorAll('.search-match').forEach((row) => row.classList.remove('search-match'));
-    const match = firstSearchMatch(list);
-    if (!match) {
+    const matches = normalizedAttendanceSearch() ? list.filter(searchMatchesStudent) : [];
+    if (!matches.length) {
       renderAttendanceCurrentRange(list);
       return;
     }
+    matches.forEach((rec) => {
+      const matchRow = elAttendanceList.querySelector(`[data-att-row-student="${cssAttr(attendanceStudentId(rec))}"]`);
+      if (matchRow) matchRow.classList.add('search-match');
+    });
+    const match = matches[0];
     const row = elAttendanceList.querySelector(`[data-att-row-student="${cssAttr(attendanceStudentId(match))}"]`);
     if (!row) {
       if (expandAttendanceYearForStudent(match)) {
@@ -1481,6 +1491,10 @@
 
   function renderAttendanceBoard(list) {
     if (!list.length) {
+      const q = state.attendanceSearch.trim();
+      if (q) {
+        return `<div class="attendance-empty">找不到「${escapeHtml(q)}」相关学生。</div>`;
+      }
       if (state.showUnfinishedOnly) {
         return '<div class="attendance-empty">当前筛选里没有未点学生。</div>';
       }
@@ -1930,7 +1944,7 @@
     if (elAttendanceSearch) {
       elAttendanceSearch.addEventListener('input', () => {
         state.attendanceSearch = elAttendanceSearch.value || '';
-        updateSearchHighlightAndScroll(true);
+        renderAttendanceView({ preserveScroll: false });
       });
     }
     if (elAttendanceDate) {
