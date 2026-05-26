@@ -5,6 +5,17 @@
   "outputDirectory": ".",
   "redirects": [
     {
+      "source": "/api/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "pwa-lark-daycare-attendance.vercel.app"
+        }
+      ],
+      "destination": "https://pwa-lark-daycare.vercel.app/api/:path*",
+      "permanent": false
+    },
+    {
       "source": "/parent.html",
       "has": [
         {
@@ -28,16 +39,6 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "has": [
-        {
-          "type": "host",
-          "value": "pwa-lark-daycare-attendance.vercel.app"
-        }
-      ],
-      "destination": "https://pwa-lark-daycare.vercel.app/api/:path*"
-    },
     {
       "source": "/",
       "has": [
