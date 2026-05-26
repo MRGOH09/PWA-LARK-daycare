@@ -71,9 +71,11 @@
 
   function scrollFeedToBottom() {
     if (!elFeed) return;
-    window.setTimeout(() => {
-      elFeed.scrollTop = elFeed.scrollHeight;
-    }, 0);
+    const scroll = () => {
+      elFeed.scrollTop = Math.max(0, elFeed.scrollHeight - elFeed.clientHeight);
+    };
+    window.requestAnimationFrame(scroll);
+    [0, 80, 240].forEach((delay) => window.setTimeout(scroll, delay));
   }
 
   function normalizeEmail(value) {
@@ -810,6 +812,7 @@
     document.querySelectorAll('[data-tab]').forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-tab') === state.activeTab);
     });
+    if (state.activeTab === 'messages') scrollFeedToBottom();
   }
 
   function urlBase64ToUint8Array(base64String) {
