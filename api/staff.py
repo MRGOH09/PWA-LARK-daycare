@@ -5,6 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lark import (
+    proxy_backend_if_needed,
     get_env, get_tenant_access_token, fetch_staff_records,
     normalize_staff_roles, send_json,
 )
@@ -12,6 +13,8 @@ from _lark import (
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             token = get_tenant_access_token(env["LARK_APP_ID"], env["LARK_APP_SECRET"])
@@ -28,6 +31,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_OPTIONS(self):
+        if proxy_backend_if_needed(self):
+            return
         send_json(self, 200, {"success": True})
 
     def log_message(self, format, *args):

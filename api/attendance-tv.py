@@ -6,7 +6,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lark import (  # noqa: E402
+from _lark import (
+    proxy_backend_if_needed,  # noqa: E402
     fetch_attendance_records,
     fetch_student_records,
     get_env,
@@ -227,6 +228,8 @@ def build_payload(env, date_text):
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             params = query_params(self.path)
             if not require_pin(self, params):
@@ -238,6 +241,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_OPTIONS(self):
+        if proxy_backend_if_needed(self):
+            return
         send_json(self, 200, {"success": True})
 
     def log_message(self, format, *args):

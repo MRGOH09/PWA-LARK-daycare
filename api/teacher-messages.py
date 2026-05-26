@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _auth import AuthError, clean, require_attendance_auth  # noqa: E402
-from _lark import get_env, read_json_body, send_json  # noqa: E402
+from _lark import proxy_backend_if_needed, get_env, read_json_body, send_json  # noqa: E402
 from _parent import fetch_all_parent_children  # noqa: E402
 from _supabase import (  # noqa: E402
     fetch_parent_messages,
@@ -89,6 +89,8 @@ def read_states_by_student(rows):
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             auth_user = require_attendance_auth(self, env)
@@ -117,6 +119,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_POST(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             auth_user = require_attendance_auth(self, env)
@@ -147,6 +151,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_PATCH(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             auth_user = require_attendance_auth(self, env)
@@ -172,6 +178,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_OPTIONS(self):
+        if proxy_backend_if_needed(self):
+            return
         send_json(self, 200, {"success": True})
 
     def log_message(self, format, *args):

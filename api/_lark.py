@@ -9,6 +9,7 @@ LARK_RECORDS_URL = "https://open.larksuite.com/open-apis/bitable/v1/apps/{app}/t
 DEFAULT_STUDENT_TABLE_ID = "tblKaj1Jpd7JJ1LA"
 
 REQUIRED_ENV = ("LARK_APP_ID", "LARK_APP_SECRET", "LARK_BASE_TOKEN", "LARK_TABLE_ID")
+BACKEND_PROXY_BASE = "https://pwa-lark-daycare.vercel.app"
 
 FIELD_DAY = "礼拜几"
 FIELD_BLOCK = "BLOCK"
@@ -78,6 +79,46 @@ def get_env():
         if optional_value:
             env[optional_key] = optional_value.strip()
     return env
+
+
+def should_proxy_backend():
+    return any(not os.environ.get(k) for k in REQUIRED_ENV)
+
+
+def proxy_backend(handler):
+    length = int(handler.headers.get("Content-Length") or 0)
+    body = handler.rfile.read(length) if length else None
+    headers = {}
+    for key, value in handler.headers.items():
+        if key.lower() in {"host", "content-length", "connection", "accept-encoding"}:
+            continue
+        headers[key] = value
+    try:
+        resp = requests.request(
+            handler.command,
+            f"{BACKEND_PROXY_BASE}{handler.path}",
+            headers=headers,
+            data=body,
+            timeout=30,
+            allow_redirects=False,
+        )
+        handler.send_response(resp.status_code)
+        skipped = {"content-encoding", "transfer-encoding", "connection", "content-length"}
+        for key, value in resp.headers.items():
+            if key.lower() not in skipped:
+                handler.send_header(key, value)
+        handler.send_header("Content-Length", str(len(resp.content)))
+        handler.end_headers()
+        handler.wfile.write(resp.content)
+    except Exception as exc:
+        send_json(handler, 502, {"success": False, "error": f"Backend proxy failed: {exc}"})
+
+
+def proxy_backend_if_needed(handler):
+    if not should_proxy_backend():
+        return False
+    proxy_backend(handler)
+    return True
 
 
 def get_tenant_access_token(app_id, app_secret):

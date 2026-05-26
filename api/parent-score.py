@@ -6,7 +6,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _auth import AuthError, bearer_token, clean, verify_session_token  # noqa: E402
-from _lark import get_env, send_json  # noqa: E402
+from _lark import proxy_backend_if_needed, get_env, send_json  # noqa: E402
 from _noble_star import score_points, score_sum, tier_payload  # noqa: E402
 from _parent import assert_parent_child  # noqa: E402
 from _supabase import fetch_score_events  # noqa: E402
@@ -48,6 +48,8 @@ def normalize_score_event(row):
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             user = verify_session_token(bearer_token(self), env)
@@ -82,6 +84,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_OPTIONS(self):
+        if proxy_backend_if_needed(self):
+            return
         send_json(self, 200, {"success": True})
 
     def log_message(self, format, *args):

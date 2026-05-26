@@ -11,11 +11,13 @@ from _auth import (  # noqa: E402
     verify_google_credential,
     verify_session_token,
 )
-from _lark import get_env, read_json_body, send_json  # noqa: E402
+from _lark import proxy_backend_if_needed, get_env, read_json_body, send_json  # noqa: E402
 
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             payload = auth_config_payload()
@@ -33,6 +35,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 401, {"success": False, "error": str(exc)})
 
     def do_POST(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             body = read_json_body(self)
@@ -55,6 +59,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 401, {"success": False, "error": str(exc)})
 
     def do_OPTIONS(self):
+        if proxy_backend_if_needed(self):
+            return
         send_json(self, 200, {"success": True})
 
     def log_message(self, format, *args):

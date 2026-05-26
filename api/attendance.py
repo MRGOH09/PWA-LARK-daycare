@@ -6,7 +6,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _lark import (  # noqa: E402
+from _lark import (
+    proxy_backend_if_needed,  # noqa: E402
     extract_text,
     fetch_attendance_records,
     get_env,
@@ -537,6 +538,8 @@ def save_lark_attendance(env, date_text, student_record_id, fields):
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             require_attendance_auth(self, env)
@@ -578,6 +581,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_POST(self):
+        if proxy_backend_if_needed(self):
+            return
         try:
             env = get_env()
             auth_user = require_attendance_auth(self, env)
@@ -641,6 +646,8 @@ class handler(BaseHTTPRequestHandler):
             send_json(self, 500, {"success": False, "error": str(exc)})
 
     def do_OPTIONS(self):
+        if proxy_backend_if_needed(self):
+            return
         send_json(self, 200, {"success": True})
 
     def log_message(self, format, *args):
