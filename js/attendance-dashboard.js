@@ -9,7 +9,7 @@
     range: 'day',
     view: 'students',
     data: null,
-    filters: { search: '', campus: '', year: '', block: '', period: '', teacher: '', status: '' },
+    filters: { search: '', campus: '', year: '', block: '', period: '', teacher: '', operator: '', status: '' },
     selectedDate: '',
     monthData: null,
     studentMaster: null
@@ -128,7 +128,7 @@
     document.querySelectorAll('[data-view]').forEach((btn) => {
       btn.setAttribute('aria-selected', String(btn.dataset.view === state.view));
     });
-    if (elStudentFilters) elStudentFilters.hidden = state.view !== 'students';
+    if (elStudentFilters) elStudentFilters.hidden = false;
     if (elStudentAnalysis) elStudentAnalysis.hidden = state.view !== 'students';
     if (elScopeNote) elScopeNote.hidden = state.view !== 'students';
     renderCurrentView();
@@ -281,10 +281,18 @@
 
   function renderStudentFilters(attendance) {
     const filters = (attendance && attendance.filters) || {};
+    if (elSearch) {
+      elSearch.placeholder = '搜索学生/负责老师/编号';
+      elSearch.setAttribute('aria-label', '搜索学生、负责老师或编号');
+    }
+    Object.values(filterEls).forEach((el) => {
+      if (el) el.hidden = false;
+    });
     populateSelect(filterEls.campus, '全部分院', filters.campuses, state.filters.campus);
     populateSelect(filterEls.year, '全部年级', filters.years, state.filters.year);
     populateSelect(filterEls.block, '全部 BLOCK', filters.blocks, state.filters.block);
-    populateSelect(filterEls.teacher, '全部老师', filters.teachers, state.filters.teacher);
+    if (filterEls.teacher) filterEls.teacher.setAttribute('aria-label', '筛选负责老师');
+    populateSelect(filterEls.teacher, '全部负责老师', filters.teachers, state.filters.teacher);
     if (filterEls.status) {
       const statuses = filters.statuses || [];
       filterEls.status.innerHTML = '<option value="">全部状态</option>' + statuses
@@ -775,12 +783,68 @@
     }
   }
 
-  function renderTeacherSummary(data) {
-    const totals = data.totals || {};
+  function teacherName(person) {
+    return String((person && (person.name || person.email)) || '未记录');
+  }
+
+  function teacherFilterOptions(data) {
+    return Array.from(new Set(((data && data.people) || []).map(teacherName).filter(Boolean))).sort();
+  }
+
+  function renderTeacherFilters(data) {
+    if (elSearch) {
+      elSearch.placeholder = '搜索点名老师/邮箱';
+      elSearch.setAttribute('aria-label', '搜索点名老师或邮箱');
+    }
+    if (filterEls.campus) filterEls.campus.hidden = true;
+    if (filterEls.year) filterEls.year.hidden = true;
+    if (filterEls.block) filterEls.block.hidden = true;
+    if (filterEls.status) filterEls.status.hidden = true;
+    if (filterEls.teacher) {
+      filterEls.teacher.hidden = false;
+      filterEls.teacher.setAttribute('aria-label', '筛选点名老师');
+      populateSelect(filterEls.teacher, '全部点名老师', teacherFilterOptions(data), state.filters.operator);
+    }
+  }
+
+  function filteredTeacherPeople(data) {
+    const search = state.filters.search.trim().toLowerCase();
+    return ((data && data.people) || []).filter((person) => {
+      if (state.filters.operator && teacherName(person) !== state.filters.operator) return false;
+      if (!search) return true;
+      return [person.name, person.email]
+        .some((value) => String(value || '').toLowerCase().includes(search));
+    });
+  }
+
+  function summarizeTeacherPeople(data, people) {
+    if (!state.filters.operator && !state.filters.search.trim() && data && data.totals) return data.totals;
+    const steps = statsSteps(data);
+    const totals = {
+      attendanceActions: 0,
+      uniqueStudents: 0,
+      homeworkCompleted: 0,
+      homeworkNotCompleted: 0,
+      byStep: {}
+    };
+    people.forEach((person) => {
+      totals.attendanceActions += Number(person.attendanceActions || 0);
+      totals.uniqueStudents += Number(person.uniqueStudents || 0);
+      totals.homeworkCompleted += Number(person.homeworkCompleted || 0);
+      totals.homeworkNotCompleted += Number(person.homeworkNotCompleted || 0);
+      steps.forEach((step) => {
+        totals.byStep[step.key] = (totals.byStep[step.key] || 0) + Number((person.byStep || {})[step.key] || 0);
+      });
+    });
+    return totals;
+  }
+
+  function renderTeacherSummary(data, people) {
+    const totals = summarizeTeacherPeople(data, people);
     const steps = statsSteps(data);
     const byStep = totals.byStep || {};
     const cards = [
-      ['记录人数', (data.people || []).length],
+      ['点名老师', people.length],
       ['点名操作', totals.attendanceActions || 0],
       ['影响学生', totals.uniqueStudents || 0],
       ...steps.map((step) => [step.label, byStep[step.key] || 0]),
@@ -790,11 +854,10 @@
     elSummary.innerHTML = cards.map(([label, value]) => cardHtml(label, value)).join('');
   }
 
-  function renderTeacherTable(data) {
-    const people = data.people || [];
+  function renderTeacherTable(data, people) {
     if (!people.length) {
       elContent.className = 'empty';
-      elContent.textContent = `这个${state.range === 'month' ? '月份' : '日期'}暂时没有点名操作记录。`;
+      elContent.textContent = `当前筛选下没有点名老师操作记录。`;
       return;
     }
     const steps = statsSteps(data);
@@ -802,7 +865,7 @@
     elContent.innerHTML = `<table>
       <thead>
         <tr>
-          <th>老师</th>
+          <th>点名老师</th>
           <th>点名操作</th>
           <th>影响学生</th>
           ${steps.map((step) => `<th>${escapeHtml(step.label)}</th>`).join('')}
@@ -830,8 +893,10 @@
     if (elStudentAnalysis) elStudentAnalysis.hidden = true;
     if (elScopeNote) elScopeNote.hidden = true;
     elSteps.hidden = true;
-    renderTeacherSummary(state.data || {});
-    renderTeacherTable(state.data || {});
+    renderTeacherFilters(state.data || {});
+    const people = filteredTeacherPeople(state.data || {});
+    renderTeacherSummary(state.data || {}, people);
+    renderTeacherTable(state.data || {}, people);
   }
 
   function renderCurrentView() {
@@ -1013,7 +1078,11 @@
     Object.entries(filterEls).forEach(([key, el]) => {
       if (!el) return;
       el.addEventListener('change', () => {
-        state.filters[key] = el.value || '';
+        if (key === 'teacher' && state.view === 'teachers') {
+          state.filters.operator = el.value || '';
+        } else {
+          state.filters[key] = el.value || '';
+        }
         renderCurrentView();
       });
     });
