@@ -41,6 +41,7 @@
     campus: $('#filter-campus'),
     year: $('#filter-year'),
     block: $('#filter-block'),
+    period: $('#filter-period'),
     teacher: $('#filter-teacher'),
     status: $('#filter-status')
   };
@@ -124,7 +125,12 @@
   }
 
   function setView(view) {
+    const previousView = state.view;
     state.view = view === 'teachers' ? 'teachers' : 'students';
+    if (previousView !== state.view) {
+      state.filters.search = '';
+      if (elSearch) elSearch.value = '';
+    }
     document.querySelectorAll('[data-view]').forEach((btn) => {
       btn.setAttribute('aria-selected', String(btn.dataset.view === state.view));
     });
@@ -279,27 +285,33 @@
     el.value = current || '';
   }
 
+  function populatePeriodSelect(el, values, current) {
+    if (!el) return;
+    const labelForPeriod = (value) => {
+      if (value === '早上') return '早上班';
+      if (value === '下午') return '下午班';
+      return value;
+    };
+    const options = ['<option value="">全部早上/下午班</option>']
+      .concat((values || []).map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(labelForPeriod(value))}</option>`));
+    el.innerHTML = options.join('');
+    el.value = current || '';
+  }
+
   function renderStudentFilters(attendance) {
     const filters = (attendance && attendance.filters) || {};
     if (elSearch) {
-      elSearch.placeholder = '搜索学生/负责老师/编号';
-      elSearch.setAttribute('aria-label', '搜索学生、负责老师或编号');
+      elSearch.hidden = true;
     }
-    Object.values(filterEls).forEach((el) => {
-      if (el) el.hidden = false;
-    });
+    if (filterEls.campus) filterEls.campus.hidden = false;
+    if (filterEls.block) filterEls.block.hidden = false;
+    if (filterEls.period) filterEls.period.hidden = false;
+    if (filterEls.year) filterEls.year.hidden = true;
+    if (filterEls.teacher) filterEls.teacher.hidden = true;
+    if (filterEls.status) filterEls.status.hidden = true;
     populateSelect(filterEls.campus, '全部分院', filters.campuses, state.filters.campus);
-    populateSelect(filterEls.year, '全部年级', filters.years, state.filters.year);
     populateSelect(filterEls.block, '全部 BLOCK', filters.blocks, state.filters.block);
-    if (filterEls.teacher) filterEls.teacher.setAttribute('aria-label', '筛选负责老师');
-    populateSelect(filterEls.teacher, '全部负责老师', filters.teachers, state.filters.teacher);
-    if (filterEls.status) {
-      const statuses = filters.statuses || [];
-      filterEls.status.innerHTML = '<option value="">全部状态</option>' + statuses
-        .map((item) => `<option value="${escapeHtml(item.key)}">${escapeHtml(item.label)}</option>`)
-        .join('');
-      filterEls.status.value = state.filters.status || '';
-    }
+    populatePeriodSelect(filterEls.period, filters.periods, state.filters.period);
   }
 
   function statusLabel(status) {
@@ -324,6 +336,7 @@
       campuses: unique(students.map((student) => student.campus)),
       years: unique(students.map((student) => student.year)),
       blocks: unique(students.map((student) => student.block)),
+      periods: unique(students.map((student) => student.period)),
       teachers: unique(students.map((student) => student.teacher)),
       statuses: [
         { key: 'complete', label: '已完成' },
@@ -715,10 +728,14 @@
       const item = counts[step];
       const total = item.checked + item.missing;
       const pct = total ? Math.round((item.checked / total) * 100) : 0;
-      return `<article class="step-card">
+      return `<article class="step-card pie-card">
+        <div class="pie-chart" style="--pct:${pct}%" data-label="${pct}%"></div>
         <strong>${escapeHtml(labels[step] || step)}</strong>
-        <div class="bar"><span style="width:${pct}%"></span></div>
-        <p>${pct}% 已点 · ${escapeHtml(item.missing)} 未点</p>
+        <p>${pct}% 已点名</p>
+        <div class="pie-stats">
+          <span>点名人数<b>${escapeHtml(item.checked)}</b></span>
+          <span>没有点<b>${escapeHtml(item.missing)}</b></span>
+        </div>
       </article>`;
     }).join('');
   }
@@ -770,14 +787,16 @@
   function renderStudentsView() {
     const attendance = attendanceDataset(state.data || {});
     renderStudentFilters(attendance);
-    renderCalendar();
     const totalStudents = (attendance.students || []).filter((student) => state.range !== 'day' || studentDate(student) === activeDate());
     const students = filteredStudents();
-    renderStudentSummary(students);
-    renderScopeNote(totalStudents, students);
-    renderMatrix(totalStudents);
+    if (elSummary) elSummary.hidden = true;
+    if (elScopeNote) elScopeNote.hidden = true;
+    if (elStudentAnalysis) elStudentAnalysis.hidden = true;
     renderStepOverview(students);
-    renderStudentTable(students);
+    if (elContent) {
+      elContent.hidden = true;
+      elContent.innerHTML = '';
+    }
     if (elClearMatrixFilter) {
       elClearMatrixFilter.hidden = !(state.filters.campus || state.filters.block || state.filters.period);
     }
@@ -793,12 +812,14 @@
 
   function renderTeacherFilters(data) {
     if (elSearch) {
+      elSearch.hidden = false;
       elSearch.placeholder = '搜索点名老师/邮箱';
       elSearch.setAttribute('aria-label', '搜索点名老师或邮箱');
     }
     if (filterEls.campus) filterEls.campus.hidden = true;
     if (filterEls.year) filterEls.year.hidden = true;
     if (filterEls.block) filterEls.block.hidden = true;
+    if (filterEls.period) filterEls.period.hidden = true;
     if (filterEls.status) filterEls.status.hidden = true;
     if (filterEls.teacher) {
       filterEls.teacher.hidden = false;
@@ -855,6 +876,7 @@
   }
 
   function renderTeacherTable(data, people) {
+    if (elContent) elContent.hidden = false;
     if (!people.length) {
       elContent.className = 'empty';
       elContent.textContent = `当前筛选下没有点名老师操作记录。`;
@@ -890,6 +912,7 @@
   }
 
   function renderTeachersView() {
+    if (elSummary) elSummary.hidden = false;
     if (elStudentAnalysis) elStudentAnalysis.hidden = true;
     if (elScopeNote) elScopeNote.hidden = true;
     elSteps.hidden = true;

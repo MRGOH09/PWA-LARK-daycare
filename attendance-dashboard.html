@@ -334,29 +334,70 @@
   }
   .step-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
   }
   .step-card {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--panel);
-    padding: 12px;
+    padding: 16px;
   }
-  .step-card strong { display: block; margin-bottom: 6px; }
-  .step-card .bar {
-    height: 7px;
-    border-radius: 999px;
-    background: #0b1220;
-    overflow: hidden;
-    margin: 8px 0;
+  .pie-card {
+    min-height: 246px;
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    text-align: center;
   }
-  .step-card .bar span {
+  .pie-chart {
+    width: 128px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: conic-gradient(var(--accent) var(--pct), #263244 0);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+  }
+  .pie-chart::after {
+    content: attr(data-label);
+    width: 82px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 900;
+  }
+  .pie-card strong {
     display: block;
-    height: 100%;
-    background: var(--good);
+    font-size: 18px;
   }
-  .step-card p { margin: 0; }
+  .pie-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .pie-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .pie-stats span {
+    border-radius: 8px;
+    background: var(--panel-2);
+    padding: 9px;
+    color: var(--muted);
+  }
+  .pie-stats b {
+    display: block;
+    color: var(--text);
+    font-size: 18px;
+    margin-top: 2px;
+  }
   .modal {
     position: fixed;
     inset: 0;
@@ -496,8 +537,9 @@
   <div class="toolbar" id="student-filters">
     <input id="student-search" type="search" placeholder="搜索学生/负责老师/编号" aria-label="搜索学生、负责老师或编号" />
     <select id="filter-campus" aria-label="筛选分院"></select>
-    <select id="filter-year" aria-label="筛选年级"></select>
     <select id="filter-block" aria-label="筛选 BLOCK"></select>
+    <select id="filter-period" aria-label="筛选早上下午班"></select>
+    <select id="filter-year" aria-label="筛选年级"></select>
     <select id="filter-teacher" aria-label="筛选负责老师"></select>
     <select id="filter-status" aria-label="筛选点名状态"></select>
   </div>
@@ -541,6 +583,6 @@
   </div>
 </section>
 
-<script src="js/attendance-dashboard.js?v=16" defer></script>
+<script src="js/attendance-dashboard.js?v=17" defer></script>
 </body>
 </html>
