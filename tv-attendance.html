@@ -20,6 +20,96 @@
     --purple: #8b5cf6;
     --gray: #94a3b8;
     --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+    --screen-pad: 28px;
+    --board-gap: 18px;
+    --board-title-size: clamp(36px, 4.8vw, 74px);
+    --meta-size: clamp(15px, 1.35vw, 21px);
+    --teacher-size: clamp(19px, 1.8vw, 30px);
+    --stat-min-height: 112px;
+    --stat-value-size: clamp(34px, 4vw, 66px);
+    --grid-card-min: 250px;
+    --grid-gap: 14px;
+    --group-title-size: clamp(21px, 2vw, 34px);
+    --student-min-height: 148px;
+    --student-pad: 15px;
+    --student-gap: 12px;
+    --student-name-size: clamp(26px, 2.5vw, 42px);
+    --points-size: clamp(16px, 1.35vw, 22px);
+    --tier-size: clamp(12px, 1vw, 16px);
+    --status-size: clamp(15px, 1.3vw, 20px);
+    --chip-min-height: 36px;
+    --chip-size: clamp(13px, 1vw, 17px);
+    --footer-size: clamp(14px, 1.2vw, 18px);
+    --manual-scale: 1;
+  }
+
+  body.tv-size-small {
+    --screen-pad: 18px;
+    --board-gap: 12px;
+    --board-title-size: clamp(30px, 4vw, 56px);
+    --meta-size: clamp(13px, 1.05vw, 17px);
+    --teacher-size: clamp(17px, 1.45vw, 24px);
+    --stat-min-height: 88px;
+    --stat-value-size: clamp(28px, 3.1vw, 48px);
+    --grid-card-min: 216px;
+    --grid-gap: 10px;
+    --group-title-size: clamp(18px, 1.65vw, 27px);
+    --student-min-height: 120px;
+    --student-pad: 12px;
+    --student-gap: 9px;
+    --student-name-size: clamp(22px, 2vw, 32px);
+    --points-size: clamp(13px, 1.05vw, 17px);
+    --tier-size: clamp(10px, 0.86vw, 13px);
+    --status-size: clamp(13px, 1.05vw, 16px);
+    --chip-min-height: 30px;
+    --chip-size: clamp(11px, 0.86vw, 14px);
+    --footer-size: clamp(12px, 1vw, 15px);
+  }
+
+  body.tv-size-large {
+    --screen-pad: 32px;
+    --board-gap: 20px;
+    --board-title-size: clamp(42px, 5.2vw, 86px);
+    --meta-size: clamp(17px, 1.55vw, 24px);
+    --teacher-size: clamp(22px, 2vw, 34px);
+    --stat-min-height: 126px;
+    --stat-value-size: clamp(40px, 4.4vw, 76px);
+    --grid-card-min: 290px;
+    --grid-gap: 16px;
+    --group-title-size: clamp(25px, 2.25vw, 40px);
+    --student-min-height: 172px;
+    --student-pad: 18px;
+    --student-gap: 14px;
+    --student-name-size: clamp(30px, 2.8vw, 50px);
+    --points-size: clamp(18px, 1.55vw, 26px);
+    --tier-size: clamp(13px, 1.1vw, 18px);
+    --status-size: clamp(17px, 1.5vw, 23px);
+    --chip-min-height: 42px;
+    --chip-size: clamp(15px, 1.15vw, 20px);
+    --footer-size: clamp(16px, 1.35vw, 21px);
+  }
+
+  body.tv-size-xlarge {
+    --screen-pad: 36px;
+    --board-gap: 22px;
+    --board-title-size: clamp(48px, 5.6vw, 96px);
+    --meta-size: clamp(19px, 1.75vw, 27px);
+    --teacher-size: clamp(25px, 2.2vw, 38px);
+    --stat-min-height: 144px;
+    --stat-value-size: clamp(48px, 4.9vw, 88px);
+    --grid-card-min: 330px;
+    --grid-gap: 18px;
+    --group-title-size: clamp(29px, 2.55vw, 46px);
+    --student-min-height: 202px;
+    --student-pad: 21px;
+    --student-gap: 16px;
+    --student-name-size: clamp(36px, 3.2vw, 58px);
+    --points-size: clamp(21px, 1.8vw, 30px);
+    --tier-size: clamp(15px, 1.25vw, 20px);
+    --status-size: clamp(20px, 1.7vw, 26px);
+    --chip-min-height: 48px;
+    --chip-size: clamp(18px, 1.35vw, 24px);
+    --footer-size: clamp(18px, 1.5vw, 24px);
   }
 
   * { box-sizing: border-box; }
@@ -49,7 +139,7 @@
   .screen {
     min-height: 100vh;
     min-height: 100dvh;
-    padding: 28px;
+    padding: var(--screen-pad);
   }
 
   .center-screen {
@@ -153,7 +243,7 @@
   .board-screen {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
-    gap: 18px;
+    gap: var(--board-gap);
   }
 
   .board-top {
@@ -165,7 +255,7 @@
 
   .board-title h1 {
     margin: 0;
-    font-size: clamp(36px, 4.8vw, 74px);
+    font-size: var(--board-title-size);
   }
 
   .board-meta {
@@ -181,12 +271,14 @@
     background: rgba(255, 255, 255, 0.76);
     color: #075985;
     padding: 9px 14px;
-    font-size: clamp(15px, 1.35vw, 21px);
+    font-size: var(--meta-size);
     font-weight: 1000;
   }
 
   .board-actions {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 10px;
   }
 
@@ -194,6 +286,66 @@
     min-height: 48px;
     border-radius: 14px;
     font-size: 17px;
+  }
+
+  .size-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 48px;
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.76);
+    padding: 5px 6px 5px 12px;
+  }
+
+  .size-label,
+  .size-value {
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 1000;
+    white-space: nowrap;
+  }
+
+  .size-value {
+    min-width: 44px;
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .size-button {
+    min-width: 40px;
+    min-height: 34px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #475569;
+    padding: 0 10px;
+    font-size: 15px;
+    font-weight: 1000;
+  }
+
+  .size-button.active {
+    background: #0f172a;
+    color: #ffffff;
+  }
+
+  .scale-button {
+    min-width: 46px;
+    min-height: 38px;
+    border: 0;
+    border-radius: 12px;
+    background: #e2e8f0;
+    color: #0f172a;
+    padding: 0 12px;
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 1000;
+  }
+
+  .scale-button:active {
+    transform: translateY(1px);
+    background: #cbd5e1;
   }
 
   .teacher-strip {
@@ -212,7 +364,7 @@
   }
 
   .teacher-strip strong {
-    font-size: clamp(19px, 1.8vw, 30px);
+    font-size: var(--teacher-size);
     line-height: 1.2;
   }
 
@@ -223,7 +375,7 @@
   }
 
   .stat-card {
-    min-height: 112px;
+    min-height: var(--stat-min-height);
     border: 1px solid rgba(217, 231, 245, 0.9);
     border-radius: 20px;
     background: rgba(255, 255, 255, 0.84);
@@ -239,7 +391,7 @@
 
   .stat-card .value {
     margin-top: 8px;
-    font-size: clamp(34px, 4vw, 66px);
+    font-size: var(--stat-value-size);
     line-height: 0.95;
     font-weight: 1000;
     font-variant-numeric: tabular-nums;
@@ -264,8 +416,8 @@
 
   .page-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(var(--grid-card-min), 1fr));
+    gap: var(--grid-gap);
     align-content: start;
     height: 100%;
   }
@@ -284,7 +436,7 @@
   }
 
   .group-header strong {
-    font-size: clamp(21px, 2vw, 34px);
+    font-size: var(--group-title-size);
   }
 
   .group-header span {
@@ -299,13 +451,14 @@
 
   .student-card {
     display: grid;
-    gap: 12px;
-    min-height: 148px;
+    gap: var(--student-gap);
+    min-height: var(--student-min-height);
     border: 2px solid var(--line);
     border-radius: 20px;
     background: #ffffff;
-    padding: 15px;
+    padding: var(--student-pad);
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+    transform-origin: top left;
   }
 
   .student-card.arrived { border-color: rgba(34, 197, 94, 0.45); }
@@ -323,7 +476,7 @@
 
   .student-name {
     min-width: 0;
-    font-size: clamp(26px, 2.5vw, 42px);
+    font-size: var(--student-name-size);
     line-height: 1.05;
     font-weight: 1000;
     overflow-wrap: anywhere;
@@ -335,7 +488,7 @@
     background: #e2e8f0;
     color: #475569;
     padding: 7px 12px;
-    font-size: clamp(16px, 1.35vw, 22px);
+    font-size: var(--points-size);
     font-weight: 1000;
     white-space: nowrap;
   }
@@ -379,7 +532,7 @@
     background: #eef6ff;
     color: #075985;
     padding: 5px 9px;
-    font-size: clamp(12px, 1vw, 16px);
+    font-size: var(--tier-size);
     font-weight: 1000;
   }
 
@@ -388,7 +541,7 @@
     align-items: center;
     gap: 8px;
     color: var(--muted);
-    font-size: clamp(15px, 1.3vw, 20px);
+    font-size: var(--status-size);
     font-weight: 900;
   }
 
@@ -411,13 +564,13 @@
   }
 
   .flow-chip {
-    min-height: 36px;
+    min-height: var(--chip-min-height);
     border-radius: 10px;
     background: #e2e8f0;
     color: #334155;
     display: grid;
     place-items: center;
-    font-size: clamp(13px, 1vw, 17px);
+    font-size: var(--chip-size);
     font-weight: 1000;
   }
 
@@ -434,7 +587,7 @@
     justify-content: space-between;
     gap: 12px;
     color: #475569;
-    font-size: clamp(14px, 1.2vw, 18px);
+    font-size: var(--footer-size);
     font-weight: 900;
   }
 
@@ -474,7 +627,9 @@
     .board-screen { min-height: 100vh; }
     .board-top { grid-template-columns: 1fr; }
     .board-actions { justify-content: stretch; }
-    .board-actions button { flex: 1; }
+    .board-actions button,
+    .size-control { flex: 1; }
+    .size-control { justify-content: center; }
     .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .student-stage { overflow: visible; }
     .page-grid { height: auto; grid-template-columns: 1fr; }
@@ -525,6 +680,16 @@
         <div id="board-meta" class="board-meta"></div>
       </div>
       <div class="board-actions">
+        <div class="size-control" aria-label="显示大小">
+          <span class="size-label">显示</span>
+          <button class="size-button" type="button" data-size="small">小</button>
+          <button class="size-button" type="button" data-size="standard">中</button>
+          <button class="size-button" type="button" data-size="large">大</button>
+          <button class="size-button" type="button" data-size="xlarge">超</button>
+          <button id="size-minus" class="scale-button" type="button" aria-label="缩小显示">-</button>
+          <span id="size-value" class="size-value">100%</span>
+          <button id="size-plus" class="scale-button" type="button" aria-label="放大显示">+</button>
+        </div>
         <button id="change-class" class="ghost-button" type="button">更换班级</button>
         <button id="logout-pin" class="ghost-button" type="button">退出</button>
       </div>
@@ -547,6 +712,6 @@
     </footer>
   </main>
 
-  <script src="js/tv-attendance.js?v=tv-v4" defer></script>
+  <script src="js/tv-attendance.js?v=tv-v8" defer></script>
 </body>
 </html>
