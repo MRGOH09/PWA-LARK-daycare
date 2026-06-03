@@ -45,6 +45,30 @@ STATUS_LABELS_EN = {
     "home": "Home",
 }
 
+STATUS_VALUE_EN = {
+    "未点": "Not marked",
+    "已接": "Picked up",
+    "未接": "Not picked up",
+    "到了": "Arrived",
+    "还没有": "Not arrived yet",
+    "缺席": "Absent",
+    "KOKO": "KOKO",
+    "去了": "Went to tuition",
+    "迟进补习": "Entered tuition late",
+    "今天没补习": "No tuition today",
+    "冲了": "Showered",
+    "不冲凉": "No shower",
+    "吃饭了": "Had a meal",
+    "不吃饭": "Did not eat",
+    "完成了": "Completed",
+    "没完成": "Not completed",
+    "extra复习了": "Completed extra revision",
+    "没有复习": "No extra revision",
+    "未回家": "Not gone home",
+    "回家": "Gone home",
+    "去学校": "Gone to school",
+}
+
 POSITIVE_SUMMARY_ZH = {
     ("pickup", "已接"): "已接",
     ("arrival", "到了"): "到补习中心",
@@ -80,10 +104,10 @@ def today_text():
     return datetime.now(TZ).date().isoformat()
 
 
-def feed_item_from_attendance(row, child):
+def feed_item_from_attendance(row, child, language=None):
     step = clean(row.get("step_key"))
     value = clean(row.get("new_value"))
-    language = child.get("language") or "zh"
+    language = language or child.get("language") or "zh"
     child_name = child.get("studentName") or row.get("student_record_id") or "宝贝"
     message = parent_copy_for_attendance(step, value, child_name, language)
     if step == "note":
@@ -201,13 +225,20 @@ def today_status_payload(attendance_rows, language="zh"):
         out.append({
             "key": step,
             "label": labels[step],
-            "value": value or ("Not marked" if language == "en" else "未点"),
+            "value": status_value_display(value, language),
             "done": done,
             "positive": positive,
             "teacher": clean(row.get("actor_name")) or clean(row.get("actor_email")),
             "createdAt": clean(row.get("created_at")),
         })
     return out
+
+
+def status_value_display(value, language="zh"):
+    value = clean(value) or "未点"
+    if language == "en":
+        return STATUS_VALUE_EN.get(value, value)
+    return value
 
 
 def feed_item_from_score(row):
@@ -246,12 +277,14 @@ class handler(BaseHTTPRequestHandler):
             if not student_record_id:
                 raise RuntimeError("Missing studentRecordId")
             child, _children = assert_parent_child(env, user.get("email"), student_record_id)
+            requested_language = clean((q.get("language") or [""])[0]).lower()
+            language = "en" if requested_language == "en" else (child.get("language") or "zh")
             attendance_rows = fetch_student_attendance_events(env, student_record_id, limit=200)
             score_rows = fetch_score_events(env, student_record_id=student_record_id, limit=300)
             items = group_attendance_items(
-                [feed_item_from_attendance(row, child) for row in attendance_rows],
+                [feed_item_from_attendance(row, child, language) for row in attendance_rows],
                 child,
-                child.get("language") or "zh",
+                language,
             )
             items.extend(
                 feed_item_from_score(row)
@@ -264,7 +297,7 @@ class handler(BaseHTTPRequestHandler):
                 "child": child,
                 "count": len(items),
                 "today": today_text(),
-                "todayStatus": today_status_payload(attendance_rows, child.get("language") or "zh"),
+                "todayStatus": today_status_payload(attendance_rows, language),
                 "items": items[:250],
             })
         except AuthError as exc:

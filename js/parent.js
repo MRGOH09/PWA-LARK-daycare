@@ -70,6 +70,43 @@
     tabMessages: ['留言', 'Messages'],
     bottomNav: ['底部导航', 'Bottom navigation'],
     language: ['语言', 'Language'],
+    additionalInfoTitle: ['补充事项', 'Additional info'],
+    additionalInfoPending: ['资料准备中', 'Information coming soon'],
+  };
+
+  const STATUS_LABEL_TEXT = {
+    pickup: ['接生', 'Pickup'],
+    arrival: ['到补习中心', 'Arrival'],
+    tuition: ['去补习', 'Tuition'],
+    shower: ['冲凉', 'Shower'],
+    meal: ['吃饭', 'Meal'],
+    homework: ['功课', 'Homework'],
+    extra: ['extra 复习', 'Extra revision'],
+    home: ['回家', 'Home'],
+  };
+
+  const STATUS_VALUE_EN = {
+    '未点': 'Not marked',
+    '已接': 'Picked up',
+    '未接': 'Not picked up',
+    '到了': 'Arrived',
+    '还没有': 'Not arrived yet',
+    '缺席': 'Absent',
+    KOKO: 'KOKO',
+    '去了': 'Went to tuition',
+    '迟进补习': 'Entered tuition late',
+    '今天没补习': 'No tuition today',
+    '冲了': 'Showered',
+    '不冲凉': 'No shower',
+    '吃饭了': 'Had a meal',
+    '不吃饭': 'Did not eat',
+    '完成了': 'Completed',
+    '没完成': 'Not completed',
+    'extra复习了': 'Completed extra revision',
+    '没有复习': 'No extra revision',
+    '未回家': 'Not gone home',
+    '回家': 'Gone home',
+    '去学校': 'Gone to school',
   };
 
   function setParentTabAttr() {
@@ -188,6 +225,18 @@
   function uiText(key) {
     const pair = UI_TEXT[key] || ['', ''];
     return state.language === 'en' ? pair[1] : pair[0];
+  }
+
+  function statusLabelText(item) {
+    const pair = STATUS_LABEL_TEXT[item && item.key];
+    if (pair) return state.language === 'en' ? pair[1] : pair[0];
+    return (item && item.label) || '';
+  }
+
+  function statusValueText(value) {
+    const text = String(value || '').trim() || '未点';
+    if (state.language === 'en') return STATUS_VALUE_EN[text] || text;
+    return text;
   }
 
   function applyLanguage() {
@@ -444,7 +493,7 @@
     if (elScoreStrip) elScoreStrip.innerHTML = `<div class="empty">${escapeHtml(t('正在读取 Noble Star…', 'Loading Noble Star...'))}</div>`;
     if (elScoreHistory) elScoreHistory.innerHTML = '';
     try {
-      const feedResp = await fetch(`/api/parent-feed?studentRecordId=${encodeURIComponent(child.recordId)}&t=${Date.now()}`, {
+      const feedResp = await fetch(`/api/parent-feed?studentRecordId=${encodeURIComponent(child.recordId)}&language=${encodeURIComponent(state.language)}&t=${Date.now()}`, {
         cache: 'no-store',
         headers: authHeaders(),
       });
@@ -853,8 +902,8 @@
     }
     const statusCards = (state.todayStatus || []).map((item) => `
       <div class="status-card ${item.done ? 'done' : 'pending'}">
-        <div class="status-label">${escapeHtml(item.label)}</div>
-        <div class="status-value">${escapeHtml(item.value || '-')}</div>
+        <div class="status-label">${escapeHtml(statusLabelText(item))}</div>
+        <div class="status-value">${escapeHtml(statusValueText(item.value))}</div>
         <div class="status-meta">${escapeHtml(statusMeta(item) || t('今天还没有更新', 'No update today'))}</div>
       </div>
     `).join('');
@@ -876,6 +925,10 @@
         </div>
       </div>
       <div class="status-grid">${statusCards || `<div class="empty">${escapeHtml(t('今天还没有点名状态。', 'No attendance status today.'))}</div>`}</div>
+      <section class="info-card">
+        <h2>${escapeHtml(uiText('additionalInfoTitle'))}</h2>
+        <p>${escapeHtml(uiText('additionalInfoPending'))}</p>
+      </section>
       ${noteHtml}
     `;
     elTodayDashboard.querySelectorAll('[data-jump-tab]').forEach((btn) => {
