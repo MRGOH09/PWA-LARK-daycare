@@ -236,6 +236,17 @@ def fetch_student_master_summaries(env):
     return out
 
 
+def unique_student_summaries(student_lookup):
+    out = {}
+    for student in (student_lookup or {}).values():
+        record_id = clean_text(student.get("studentRecordId"))
+        student_no = clean_text(student.get("studentNo"))
+        key = record_id or (f"NO:{student_no}" if student_no else "")
+        if key:
+            out[key] = student
+    return list(out.values())
+
+
 def fetch_attendance_records_for_stats(env, start_date, end_date):
     config = supabase_config(env)
     if not config:
@@ -276,9 +287,37 @@ def student_status_label(status):
     }.get(status, status)
 
 
-def build_attendance_overview(records):
+def build_attendance_overview(records, expected_students=None, date_text=""):
+    rows = []
+    seen = set()
+    for row in records or []:
+        rows.append(row)
+        student_id = clean_text(row.get("student_record_id"))
+        student_no = clean_text(row.get("student_no"))
+        if student_id:
+            seen.add(student_id)
+        if student_no:
+            seen.add(f"NO:{student_no}")
+
+    for student in expected_students or []:
+        student_id = clean_text(student.get("studentRecordId"))
+        student_no = clean_text(student.get("studentNo"))
+        if (student_id and student_id in seen) or (student_no and f"NO:{student_no}" in seen):
+            continue
+        rows.append({
+            "date": date_text,
+            "student_record_id": student_id,
+            "student_no": student_no,
+            "student_name": clean_text(student.get("studentName")) or "未记录学生",
+            "year_form": clean_text(student.get("year")),
+            "block": clean_text(student.get("block")),
+            "campus": clean_text(student.get("campus")),
+            "period": clean_text(student.get("period")),
+            "teacher": clean_text(student.get("teacher")),
+        })
+
     totals = {
-        "totalRecords": len(records or []),
+        "totalRecords": len(rows),
         "complete": 0,
         "partial": 0,
         "notStarted": 0,
@@ -308,9 +347,9 @@ def build_attendance_overview(records):
     }
     students = []
     checked_items = 0
-    total_items = len(records or []) * len(STEP_KEYS)
+    total_items = len(rows) * len(STEP_KEYS)
 
-    for row in records or []:
+    for row in rows:
         date_text = clean_text(row.get("date"))
         missing_steps = []
         absent_steps = []
@@ -542,13 +581,21 @@ class handler(BaseHTTPRequestHandler):
             events = fetch_attendance_events(env, range_info["startDate"], range_info["endDate"])
             attendance_records = fetch_attendance_records_for_stats(env, range_info["startDate"], range_info["endDate"])
             student_lookup = fetch_attendance_record_summaries(env, range_info["startDate"], range_info["endDate"])
+            expected_students = []
             try:
-                student_lookup.update(fetch_student_master_summaries(env))
+                student_master = fetch_student_master_summaries(env)
+                student_lookup.update(student_master)
+                if range_info.get("range") == "day":
+                    expected_students = unique_student_summaries(student_master)
             except Exception:
                 pass
             whitelist_profiles = fetch_whitelist_profiles(env)
             totals, people = build_stats(events, whitelist_profiles, student_lookup)
-            attendance = build_attendance_overview(attendance_records)
+            attendance = build_attendance_overview(
+                attendance_records,
+                expected_students=expected_students,
+                date_text=range_info.get("date", ""),
+            )
             if not attendance.get("students") and events:
                 attendance = build_event_attendance_overview(events, student_lookup)
             payload = {

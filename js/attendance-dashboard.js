@@ -300,8 +300,20 @@
 
   function renderStudentFilters(attendance) {
     const filters = (attendance && attendance.filters) || {};
+    state.filters.search = '';
+    state.filters.year = '';
+    state.filters.teacher = '';
+    state.filters.status = '';
+    state.filters.operator = '';
+    if (state.range !== 'day') {
+      state.range = 'day';
+      setRange('day');
+    }
+    if (elRangeDay) elRangeDay.hidden = true;
+    if (elRangeMonth) elRangeMonth.hidden = true;
     if (elSearch) {
       elSearch.hidden = true;
+      elSearch.value = '';
     }
     if (filterEls.campus) filterEls.campus.hidden = false;
     if (filterEls.block) filterEls.block.hidden = false;
@@ -811,6 +823,8 @@
   }
 
   function renderTeacherFilters(data) {
+    if (elRangeDay) elRangeDay.hidden = false;
+    if (elRangeMonth) elRangeMonth.hidden = false;
     if (elSearch) {
       elSearch.hidden = false;
       elSearch.placeholder = '搜索点名老师/邮箱';
@@ -980,8 +994,6 @@
       if (state.range === 'month') state.monthData = data;
       elMeta.textContent = `${labelForRange(data)} · 更新于 ${data.updatedAt || '-'}`;
       renderCurrentView();
-      if (state.range === 'day') loadMonthOverview(true);
-      else if (!attendanceRecords(data).length) findLatestMonthWithData(data.month || elMonth.value || monthValue());
     } catch (err) {
       elMeta.textContent = `加载失败：${err.message}`;
       elSteps.hidden = true;
