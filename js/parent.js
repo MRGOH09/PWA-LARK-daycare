@@ -42,11 +42,35 @@
   const elMessageSend = $('#message-send');
   const elMessageStatus = $('#message-status');
   const elScoreHistory = $('#score-history');
+  const elAuthLanguage = $('#auth-language-select');
   const elLanguage = $('#language-select');
   const elRefresh = $('#refresh');
   const elVersionUpdate = $('#version-update');
   const elSignOut = $('#sign-out');
   const elNotify = $('#notify-btn');
+
+  const UI_TEXT = {
+    appTitle: ['宝贝动态', 'Baby Updates'],
+    authIntro: [
+      '请用爸爸或妈妈绑定的 Google 账号登录，只会显示自己孩子的点名和 Noble Star。',
+      "Sign in with a linked parent Google account. You will only see your own child's attendance and Noble Star.",
+    ],
+    checkingAuth: ['正在检查登录状态…', 'Checking sign-in status...'],
+    refresh: ['资料更新', 'Refresh'],
+    updateApp: ['版本更新', 'Update app'],
+    signOut: ['退出', 'Sign out'],
+    chooseChild: ['请选择孩子', 'Choose a child'],
+    statusHint: ['今天状态会显示在这里', "Today's status will appear here"],
+    enableAlerts: ['开启通知', 'Enable alerts'],
+    messagePlaceholder: ['输入给老师的留言', 'Message the teacher'],
+    send: ['发送', 'Send'],
+    myChildren: ['我的孩子', 'My children'],
+    loading: ['加载中…', 'Loading...'],
+    tabToday: ['今天', 'Today'],
+    tabMessages: ['留言', 'Messages'],
+    bottomNav: ['底部导航', 'Bottom navigation'],
+    language: ['语言', 'Language'],
+  };
 
   function setParentTabAttr() {
     document.documentElement.dataset.parentTab = state.activeTab || 'today';
@@ -87,8 +111,8 @@
     const studentName = child && child.studentName ? child.studentName : t('宝贝', 'Child');
     const fatherEmails = new Set((child && child.fatherEmails ? child.fatherEmails : []).map(normalizeEmail));
     const motherEmails = new Set((child && child.motherEmails ? child.motherEmails : []).map(normalizeEmail));
-    if (fatherEmails.has(email)) return `${studentName}爸爸`;
-    if (motherEmails.has(email)) return `${studentName}妈妈`;
+    if (fatherEmails.has(email)) return parentRoleLabel(studentName, 'father');
+    if (motherEmails.has(email)) return parentRoleLabel(studentName, 'mother');
     return t('我', 'Me');
   }
 
@@ -100,11 +124,19 @@
       if (!senderEmail || senderEmail === myEmail) return currentParentLabel(child);
       const fatherEmails = new Set((child && child.fatherEmails ? child.fatherEmails : []).map(normalizeEmail));
       const motherEmails = new Set((child && child.motherEmails ? child.motherEmails : []).map(normalizeEmail));
-      if (fatherEmails.has(senderEmail)) return `${child.studentName || t('宝贝', 'Child')}爸爸`;
-      if (motherEmails.has(senderEmail)) return `${child.studentName || t('宝贝', 'Child')}妈妈`;
+      const studentName = child.studentName || t('宝贝', 'Child');
+      if (fatherEmails.has(senderEmail)) return parentRoleLabel(studentName, 'father');
+      if (motherEmails.has(senderEmail)) return parentRoleLabel(studentName, 'mother');
       return message.senderName || t('家长', 'Parent');
     }
     return message.senderName || t('老师', 'Teacher');
+  }
+
+  function parentRoleLabel(studentName, role) {
+    if (state.language === 'en') {
+      return role === 'father' ? `${studentName}'s dad` : `${studentName}'s mom`;
+    }
+    return role === 'father' ? `${studentName}爸爸` : `${studentName}妈妈`;
   }
 
   function mentionKey(item) {
@@ -151,6 +183,54 @@
 
   function t(zh, en) {
     return state.language === 'en' ? en : zh;
+  }
+
+  function uiText(key) {
+    const pair = UI_TEXT[key] || ['', ''];
+    return state.language === 'en' ? pair[1] : pair[0];
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = state.language === 'en' ? 'en' : 'zh';
+    document.title = uiText('appTitle');
+    const appTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (appTitle) appTitle.setAttribute('content', uiText('appTitle'));
+    if (elAuthLanguage) {
+      elAuthLanguage.value = state.language;
+      elAuthLanguage.setAttribute('aria-label', uiText('language'));
+    }
+    if (elLanguage) {
+      elLanguage.value = state.language;
+      elLanguage.setAttribute('aria-label', uiText('language'));
+    }
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      el.textContent = uiText(el.getAttribute('data-i18n'));
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+      el.setAttribute('placeholder', uiText(el.getAttribute('data-i18n-placeholder')));
+    });
+    document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
+      el.setAttribute('aria-label', uiText(el.getAttribute('data-i18n-aria-label')));
+    });
+  }
+
+  function refreshLanguageDependentUi() {
+    applyLanguage();
+    renderChildren();
+    renderActiveChildShell();
+    renderFeed();
+    renderScore();
+    renderScoreHistory();
+    refreshNotificationState();
+    if (!state.user) renderGoogleButton();
+  }
+
+  function changeLanguage(value) {
+    saveLanguage(value);
+    refreshLanguageDependentUi();
+    if (!state.user && elAuthGate && !elAuthGate.hidden) {
+      setAuthUi(true, t('请使用爸爸或妈妈绑定的 Google 账号登录', 'Please sign in with a linked parent Google account'));
+    }
   }
 
   function authHeaders(extra) {
@@ -220,6 +300,7 @@
       text: 'signin_with',
       shape: 'rectangular',
       width: Math.min(320, Math.max(240, window.innerWidth - 56)),
+      locale: state.language === 'en' ? 'en' : 'zh_CN',
     });
   }
 
@@ -277,7 +358,7 @@
   window.handleParentGoogleCredential = handleGoogleCredential;
 
   function startApp() {
-    if (elLanguage) elLanguage.value = state.language;
+    applyLanguage();
     renderChildren();
     if (!state.activeChildId && state.children[0]) {
       state.activeChildId = state.children[0].recordId;
@@ -308,7 +389,7 @@
         data-child="${escapeHtml(child.recordId)}">
         <span class="avatar">${escapeHtml(initials(child.studentName))}</span>
         <span>
-          <strong>${escapeHtml(child.studentName || '宝贝')}</strong>
+          <strong>${escapeHtml(child.studentName || t('宝贝', 'Child'))}</strong>
           <span>${escapeHtml([child.campus, child.block, child.period].filter(Boolean).join(' · ') || '-')}</span>
         </span>
       </button>
@@ -942,13 +1023,11 @@
         checkAuth();
       });
     }
+    if (elAuthLanguage) {
+      elAuthLanguage.addEventListener('change', () => changeLanguage(elAuthLanguage.value));
+    }
     if (elLanguage) {
-      elLanguage.addEventListener('change', () => {
-        saveLanguage(elLanguage.value);
-        renderActiveChildShell();
-        renderFeed();
-        renderScoreHistory();
-      });
+      elLanguage.addEventListener('change', () => changeLanguage(elLanguage.value));
     }
     if (elNotify) elNotify.addEventListener('click', enableNotifications);
     if (elMessageForm) {
@@ -990,6 +1069,7 @@
     });
   }
 
+  applyLanguage();
   bindEvents();
   checkAuth();
 })();

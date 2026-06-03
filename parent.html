@@ -56,6 +56,17 @@
   }
   .auth-panel h1 { margin: 0; font-size: 25px; }
   .auth-panel p { margin: 10px 0 18px; color: var(--muted); line-height: 1.6; }
+  .auth-language {
+    width: 100%;
+    min-height: 38px;
+    margin-bottom: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 6px 9px;
+    font-weight: 900;
+  }
   #google-signin-button { display: flex; justify-content: center; min-height: 44px; }
   #auth-status { margin-top: 14px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
   .shell {
@@ -540,17 +551,21 @@
 <body>
 <section class="auth-gate" id="auth-gate">
   <div class="auth-panel">
-    <h1>宝贝动态</h1>
-    <p>请用爸爸或妈妈绑定的 Google 账号登录，只会显示自己孩子的点名和 Noble Star。</p>
+    <select class="auth-language" id="auth-language-select" aria-label="语言">
+      <option value="zh">中文</option>
+      <option value="en">English</option>
+    </select>
+    <h1 data-i18n="appTitle">宝贝动态</h1>
+    <p data-i18n="authIntro">请用爸爸或妈妈绑定的 Google 账号登录，只会显示自己孩子的点名和 Noble Star。</p>
     <div id="google-signin-button"></div>
-    <div id="auth-status">正在检查登录状态…</div>
+    <div id="auth-status" data-i18n="checkingAuth">正在检查登录状态…</div>
   </div>
 </section>
 
 <div class="shell" id="app-shell" hidden>
   <header class="top">
     <div>
-      <h1>宝贝动态</h1>
+      <h1 data-i18n="appTitle">宝贝动态</h1>
       <p id="current-user"></p>
     </div>
     <div class="top-actions">
@@ -558,9 +573,9 @@
         <option value="zh">中文</option>
         <option value="en">English</option>
       </select>
-      <button id="refresh" type="button">资料更新</button>
-      <button id="version-update" type="button">版本更新</button>
-      <button id="sign-out" type="button">退出</button>
+      <button id="refresh" type="button" data-i18n="refresh">资料更新</button>
+      <button id="version-update" type="button" data-i18n="updateApp">版本更新</button>
+      <button id="sign-out" type="button" data-i18n="signOut">退出</button>
     </div>
   </header>
   <div class="app-body">
@@ -568,10 +583,10 @@
     <main class="app-main">
       <section class="chat-head">
         <div class="chat-title">
-          <strong id="active-child-name">请选择孩子</strong>
-          <span id="active-child-meta">今天状态会显示在这里</span>
+          <strong id="active-child-name" data-i18n="chooseChild">请选择孩子</strong>
+          <span id="active-child-meta" data-i18n="statusHint">今天状态会显示在这里</span>
         </div>
-        <button class="notify-btn" id="notify-btn" type="button">开启通知</button>
+        <button class="notify-btn" id="notify-btn" type="button" data-i18n="enableAlerts">开启通知</button>
       </section>
       <section class="tab-panel today-panel active" id="today-panel">
         <div id="today-dashboard"></div>
@@ -580,8 +595,8 @@
         <section class="feed" id="feed"></section>
         <form class="message-composer" id="message-form">
           <div class="mention-menu" id="mention-menu" hidden></div>
-          <textarea id="message-input" maxlength="1200" placeholder="输入给老师的留言"></textarea>
-          <button id="message-send" type="submit">发送</button>
+          <textarea id="message-input" maxlength="1200" placeholder="输入给老师的留言" data-i18n-placeholder="messagePlaceholder"></textarea>
+          <button id="message-send" type="submit" data-i18n="send">发送</button>
           <div class="composer-status" id="message-status"></div>
         </form>
       </section>
@@ -591,21 +606,21 @@
       </section>
       <section class="tab-panel children-page" id="children-panel">
         <div class="child-list-head">
-          <strong>我的孩子</strong>
-          <span id="children-meta">加载中…</span>
+          <strong data-i18n="myChildren">我的孩子</strong>
+          <span id="children-meta" data-i18n="loading">加载中…</span>
         </div>
         <div id="children-page-list"></div>
       </section>
     </main>
   </div>
-  <nav class="bottom-nav" aria-label="底部导航">
-    <button class="active" type="button" data-tab="today">今天</button>
-    <button type="button" data-tab="messages">留言</button>
+  <nav class="bottom-nav" aria-label="底部导航" data-i18n-aria-label="bottomNav">
+    <button class="active" type="button" data-tab="today" data-i18n="tabToday">今天</button>
+    <button type="button" data-tab="messages" data-i18n="tabMessages">留言</button>
     <button type="button" data-tab="stars">Noble Star</button>
-    <button type="button" data-tab="children">我的孩子</button>
+    <button type="button" data-tab="children" data-i18n="myChildren">我的孩子</button>
   </nav>
 </div>
 
-<script src="js/parent.js?v=parent-v17"></script>
+<script src="js/parent.js?v=parent-v18"></script>
 </body>
 </html>
