@@ -23,6 +23,7 @@
   const elMonth = $('#month');
   const elRangeDay = $('#range-day');
   const elRangeMonth = $('#range-month');
+  const elRangeToggle = $('.range-toggle');
   const elQuickRefresh = $('#quick-refresh');
   const elRefresh = $('#refresh');
   const elSignOut = $('#sign-out');
@@ -311,6 +312,7 @@
     }
     if (elRangeDay) elRangeDay.hidden = true;
     if (elRangeMonth) elRangeMonth.hidden = true;
+    if (elRangeToggle) elRangeToggle.hidden = true;
     if (elSearch) {
       elSearch.hidden = true;
       elSearch.value = '';
@@ -825,6 +827,7 @@
   function renderTeacherFilters(data) {
     if (elRangeDay) elRangeDay.hidden = false;
     if (elRangeMonth) elRangeMonth.hidden = false;
+    if (elRangeToggle) elRangeToggle.hidden = false;
     if (elSearch) {
       elSearch.hidden = false;
       elSearch.placeholder = '搜索点名老师/邮箱';
