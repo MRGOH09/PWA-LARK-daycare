@@ -543,29 +543,8 @@
     <select id="filter-teacher" aria-label="筛选负责老师"></select>
     <select id="filter-status" aria-label="筛选点名状态"></select>
   </div>
-  <section class="summary" id="summary"></section>
+  <section class="summary" id="summary" hidden></section>
   <section class="scope-note" id="scope-note" hidden></section>
-  <section class="analysis-grid" id="student-analysis" hidden>
-    <article class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>月历总览</h2>
-          <p>点击日期查看当天细节</p>
-        </div>
-      </div>
-      <div id="calendar" class="calendar"></div>
-    </article>
-    <article class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>分院 × BLOCK × 时间段</h2>
-          <p>先看分院，再看该分院下的 BLOCK 和时间段</p>
-        </div>
-        <button id="clear-matrix-filter" type="button" hidden>清除</button>
-      </div>
-      <div id="matrix" class="matrix-wrap"></div>
-    </article>
-  </section>
   <section class="step-grid" id="steps"></section>
   <section id="content" class="empty">加载统计中…</section>
 </main>
@@ -583,6 +562,6 @@
   </div>
 </section>
 
-<script src="js/attendance-dashboard.js?v=18" defer></script>
+<script src="js/attendance-dashboard.js?v=19" defer></script>
 </body>
 </html>

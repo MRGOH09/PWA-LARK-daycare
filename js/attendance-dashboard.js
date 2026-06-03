@@ -1121,12 +1121,14 @@
         renderCurrentView();
       });
     });
-    elClearMatrixFilter.addEventListener('click', () => {
-      state.filters.campus = '';
-      state.filters.block = '';
-      state.filters.period = '';
-      renderCurrentView();
-    });
+    if (elClearMatrixFilter) {
+      elClearMatrixFilter.addEventListener('click', () => {
+        state.filters.campus = '';
+        state.filters.block = '';
+        state.filters.period = '';
+        renderCurrentView();
+      });
+    }
     elStudentModalClose.addEventListener('click', closeStudentDetail);
     elStudentModal.addEventListener('click', (event) => {
       if (event.target === elStudentModal) closeStudentDetail();
