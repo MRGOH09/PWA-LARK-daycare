@@ -12,7 +12,8 @@
     filters: { search: '', campus: '', year: '', block: '', period: '', teacher: '', operator: '', status: '' },
     selectedDate: '',
     monthData: null,
-    studentMaster: null
+    studentMaster: null,
+    studentMasterList: []
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -371,6 +372,7 @@
 
   function buildStudentMaster(records) {
     const lookup = {};
+    const list = [];
     (records || []).forEach((record) => {
       const fields = record.fields || {};
       const info = {
@@ -383,11 +385,12 @@
         period: fieldValue(fields, ['时间段', '时段', 'Time']),
         teacher: fieldValue(fields, ['负责老师', '老师', 'Teacher'])
       };
+      list.push(info);
       if (info.studentRecordId) lookup[info.studentRecordId] = info;
       if (info.studentNo) lookup[`NO:${info.studentNo}`] = info;
       if (info.studentName) lookup[`NAME:${info.studentName}`] = info;
     });
-    return lookup;
+    return { lookup, list };
   }
 
   async function loadStudentMaster() {
@@ -399,9 +402,12 @@
       });
       const data = await resp.json();
       if (!resp.ok || !data.success) throw new Error(data.error || `HTTP ${resp.status}`);
-      state.studentMaster = buildStudentMaster(data.records || []);
+      const master = buildStudentMaster(data.records || []);
+      state.studentMaster = master.lookup;
+      state.studentMasterList = master.list;
     } catch {
       state.studentMaster = {};
+      state.studentMasterList = [];
     }
     return state.studentMaster;
   }
@@ -474,8 +480,65 @@
 
   function attendanceDataset(data) {
     const attendance = (data || {}).attendance || {};
-    if ((attendance.students || []).length) return attendance;
-    return eventFallbackAttendance(data || {});
+    if ((attendance.students || []).length) return expectedAttendance(attendance, data || {});
+    return expectedAttendance(eventFallbackAttendance(data || {}), data || {});
+  }
+
+  function studentKey(student) {
+    return student.studentRecordId || (student.studentNo ? `NO:${student.studentNo}` : '') || (student.studentName ? `NAME:${student.studentName}` : '');
+  }
+
+  function missingStudentRow(info, date) {
+    const labels = (state.data || {}).stepLabels || {};
+    const steps = {};
+    const missingSteps = STEP_ORDER.map((step) => {
+      steps[step] = '未点';
+      return { key: step, label: labels[step] || step };
+    });
+    return {
+      date,
+      studentRecordId: info.studentRecordId || '',
+      studentNo: info.studentNo || '',
+      studentName: info.studentName || info.studentNo || '未记录学生',
+      year: info.year || '',
+      block: info.block || '未记录 BLOCK',
+      campus: info.campus || '',
+      period: info.period || '未记录时间',
+      teacher: info.teacher || '',
+      steps,
+      status: 'not-started',
+      statusLabel: statusLabel('not-started'),
+      checkedSteps: 0,
+      totalSteps: STEP_ORDER.length,
+      completionRate: 0,
+      missingSteps,
+      absentSteps: [],
+      updatedAt: '',
+      updatedByName: '',
+      updatedByEmail: ''
+    };
+  }
+
+  function expectedAttendance(attendance, data) {
+    if (state.range !== 'day' || !state.studentMasterList.length) return attendance;
+    const date = (data && data.date) || activeDate();
+    const rows = (attendance.students || []).filter((student) => studentDate(student) === date);
+    const byKey = {};
+    rows.forEach((student) => {
+      const key = studentKey(student);
+      if (key) byKey[key] = student;
+    });
+    state.studentMasterList.forEach((info) => {
+      const key = studentKey(info);
+      if (key && !byKey[key]) byKey[key] = missingStudentRow(info, date);
+    });
+    const students = Object.values(byKey).sort((a, b) => `${a.date}|${a.campus}|${a.block}|${a.period}|${a.studentName}`.localeCompare(`${b.date}|${b.campus}|${b.block}|${b.period}|${b.studentName}`));
+    return {
+      ...attendance,
+      students,
+      filters: filtersFromStudents(students),
+      source: attendance.source === 'records' ? 'records+students' : attendance.source
+    };
   }
 
   function studentMatchesFilters(student, options = {}) {
