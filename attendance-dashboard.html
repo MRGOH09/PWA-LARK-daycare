@@ -405,6 +405,40 @@
     font-size: 18px;
     margin-top: 2px;
   }
+  .note-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .note-group-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    padding: 12px;
+  }
+  .note-group-card strong {
+    display: block;
+    font-size: 16px;
+  }
+  .note-group-card span {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  tr.note-row { cursor: pointer; }
+  tr.note-group-row td {
+    background: #111827;
+    color: #7dd3fc;
+    font-weight: 900;
+  }
+  td.note-text {
+    min-width: 320px;
+    max-width: 560px;
+    white-space: normal;
+    line-height: 1.45;
+  }
   .modal {
     position: fixed;
     inset: 0;
@@ -529,6 +563,7 @@
   <nav class="tabs" aria-label="Dashboard 视图">
     <button id="tab-students" type="button" data-view="students" aria-selected="true">学生点名状况</button>
     <button id="tab-teachers" type="button" data-view="teachers" aria-selected="false">老师操作统计</button>
+    <button id="tab-notes" type="button" data-view="notes" aria-selected="false">今日留言</button>
   </nav>
   <div class="toolbar">
     <div class="range-toggle" aria-label="统计范围">
@@ -548,6 +583,7 @@
     <select id="filter-period" aria-label="筛选早上下午班"></select>
     <select id="filter-year" aria-label="筛选年级"></select>
     <select id="filter-teacher" aria-label="筛选负责老师"></select>
+    <select id="filter-group" aria-label="留言分组"></select>
     <select id="filter-status" aria-label="筛选点名状态"></select>
   </div>
   <section class="summary" id="summary" hidden></section>
@@ -569,6 +605,6 @@
   </div>
 </section>
 
-<script src="js/attendance-dashboard.js?v=22" defer></script>
+<script src="js/attendance-dashboard.js?v=23" defer></script>
 </body>
 </html>

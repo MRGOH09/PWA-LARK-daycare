@@ -10,6 +10,7 @@
     view: 'students',
     data: null,
     filters: { search: '', campus: '', year: '', block: '', period: '', teacher: '', operator: '', status: '' },
+    noteGroup: 'teacher',
     selectedDate: '',
     monthData: null,
     studentMaster: null,
@@ -45,6 +46,7 @@
     block: $('#filter-block'),
     period: $('#filter-period'),
     teacher: $('#filter-teacher'),
+    group: $('#filter-group'),
     status: $('#filter-status')
   };
   const elStudentModal = $('#student-modal');
@@ -128,7 +130,7 @@
 
   function setView(view) {
     const previousView = state.view;
-    state.view = view === 'teachers' ? 'teachers' : 'students';
+    state.view = ['teachers', 'notes'].includes(view) ? view : 'students';
     if (previousView !== state.view) {
       state.filters.search = '';
       if (elSearch) elSearch.value = '';
@@ -323,6 +325,7 @@
     if (filterEls.period) filterEls.period.hidden = false;
     if (filterEls.year) filterEls.year.hidden = true;
     if (filterEls.teacher) filterEls.teacher.hidden = true;
+    if (filterEls.group) filterEls.group.hidden = true;
     if (filterEls.status) filterEls.status.hidden = true;
     populateSelect(filterEls.campus, '全部分院', filters.campuses, state.filters.campus);
     populateSelect(filterEls.block, '全部 BLOCK', filters.blocks, state.filters.block);
@@ -903,6 +906,7 @@
     if (filterEls.year) filterEls.year.hidden = true;
     if (filterEls.block) filterEls.block.hidden = true;
     if (filterEls.period) filterEls.period.hidden = true;
+    if (filterEls.group) filterEls.group.hidden = true;
     if (filterEls.status) filterEls.status.hidden = true;
     if (filterEls.teacher) {
       filterEls.teacher.hidden = false;
@@ -1005,9 +1009,241 @@
     renderTeacherTable(state.data || {}, people);
   }
 
+  function noteTeacherName(note) {
+    return note.teacherName || note.teacherEmail || '未记录老师';
+  }
+
+  function noteDate(note) {
+    return String((note && note.date) || '');
+  }
+
+  function normalizeNoteText(value) {
+    return String(value || '').trim();
+  }
+
+  function notesFromEvents(data) {
+    const notes = [];
+    const seen = new Set();
+    ((data && data.people) || []).forEach((person) => {
+      const teacher = teacherName(person);
+      (person.details || []).forEach((detail) => {
+        if (detail.stepKey !== 'note') return;
+        const noteText = normalizeNoteText(detail.newValue || detail.oldValue);
+        if (!noteText) return;
+        const master = masterStudentInfo(detail);
+        const note = {
+          id: detail.id || `${detail.date}|${detail.studentRecordId}|${teacher}|${detail.createdAt}|${noteText}`,
+          date: detail.date || '',
+          createdAt: detail.createdAt || '',
+          teacherName: teacher,
+          teacherEmail: person.email || '',
+          studentRecordId: detail.studentRecordId || master.studentRecordId || '',
+          studentNo: detail.studentNo || master.studentNo || '',
+          studentName: detail.studentName || master.studentName || '未记录学生',
+          campus: detail.campus || master.campus || '',
+          year: detail.year || master.year || '',
+          block: detail.block || master.block || '',
+          period: detail.period || master.period || '',
+          ownerTeacher: detail.teacher || master.teacher || '',
+          note: noteText,
+          source: 'event'
+        };
+        const key = `${note.date}|||${note.studentRecordId || note.studentName}|||${note.teacherName}|||${note.createdAt}|||${note.note}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        notes.push(note);
+      });
+    });
+    return notes;
+  }
+
+  function notesFromStudentRows(data, existingNotes) {
+    const seenStudents = new Set((existingNotes || []).map((note) => `${note.date}|||${note.studentRecordId || note.studentName}|||${note.note}`));
+    return ((attendanceDataset(data || {}).students) || [])
+      .filter((student) => normalizeNoteText(student.note))
+      .map((student) => ({
+        id: `student-note-${student.date}-${student.studentRecordId || student.studentName}`,
+        date: student.date || '',
+        createdAt: student.updatedAt || '',
+        teacherName: student.updatedByName || student.updatedByEmail || '未记录老师',
+        teacherEmail: student.updatedByEmail || '',
+        studentRecordId: student.studentRecordId || '',
+        studentNo: student.studentNo || '',
+        studentName: student.studentName || '未记录学生',
+        campus: student.campus || '',
+        year: student.year || '',
+        block: student.block || '',
+        period: student.period || '',
+        ownerTeacher: student.teacher || '',
+        note: normalizeNoteText(student.note),
+        source: 'record'
+      }))
+      .filter((note) => !seenStudents.has(`${note.date}|||${note.studentRecordId || note.studentName}|||${note.note}`));
+  }
+
+  function allNotes(data) {
+    const eventNotes = notesFromEvents(data || {});
+    const rowNotes = notesFromStudentRows(data || {}, eventNotes);
+    return eventNotes.concat(rowNotes)
+      .sort((a, b) => `${b.date}|${b.createdAt}`.localeCompare(`${a.date}|${a.createdAt}`));
+  }
+
+  function noteFiltersFromNotes(notes) {
+    const unique = (values) => Array.from(new Set(values.filter(Boolean))).sort();
+    return {
+      campuses: unique(notes.map((note) => note.campus)),
+      blocks: unique(notes.map((note) => note.block)),
+      periods: unique(notes.map((note) => note.period)),
+      teachers: unique(notes.map(noteTeacherName))
+    };
+  }
+
+  function renderNoteFilters(data) {
+    const notes = allNotes(data || {});
+    const filters = noteFiltersFromNotes(notes);
+    if (state.range !== 'day') {
+      state.range = 'day';
+      setRange('day');
+    }
+    if (elRangeDay) elRangeDay.hidden = true;
+    if (elRangeMonth) elRangeMonth.hidden = true;
+    if (elRangeToggle) elRangeToggle.hidden = true;
+    if (elSearch) {
+      elSearch.hidden = false;
+      elSearch.placeholder = '搜索学生/老师/留言';
+      elSearch.setAttribute('aria-label', '搜索学生、老师或留言');
+    }
+    if (filterEls.campus) filterEls.campus.hidden = false;
+    if (filterEls.block) filterEls.block.hidden = false;
+    if (filterEls.period) filterEls.period.hidden = false;
+    if (filterEls.year) filterEls.year.hidden = true;
+    if (filterEls.status) filterEls.status.hidden = true;
+    if (filterEls.teacher) {
+      filterEls.teacher.hidden = false;
+      filterEls.teacher.setAttribute('aria-label', '筛选留言老师');
+      populateSelect(filterEls.teacher, '全部留言老师', filters.teachers, state.filters.operator);
+    }
+    if (filterEls.group) {
+      filterEls.group.hidden = false;
+      filterEls.group.innerHTML = [
+        '<option value="teacher">Group by 老师</option>',
+        '<option value="campus">Group by 分院</option>',
+        '<option value="none">不分组</option>'
+      ].join('');
+      filterEls.group.value = state.noteGroup || 'teacher';
+    }
+    populateSelect(filterEls.campus, '全部分院', filters.campuses, state.filters.campus);
+    populateSelect(filterEls.block, '全部 BLOCK', filters.blocks, state.filters.block);
+    populatePeriodSelect(filterEls.period, filters.periods, state.filters.period);
+  }
+
+  function noteMatchesFilters(note) {
+    if (state.range === 'day' && noteDate(note) !== activeDate()) return false;
+    if (state.filters.campus && note.campus !== state.filters.campus) return false;
+    if (state.filters.block && note.block !== state.filters.block) return false;
+    if (state.filters.period && note.period !== state.filters.period) return false;
+    if (state.filters.operator && noteTeacherName(note) !== state.filters.operator) return false;
+    const search = state.filters.search.trim().toLowerCase();
+    if (!search) return true;
+    return [note.teacherName, note.teacherEmail, note.studentName, note.studentNo, note.note, note.campus, note.block, note.period]
+      .some((value) => String(value || '').toLowerCase().includes(search));
+  }
+
+  function filteredNotes(data) {
+    return allNotes(data || {}).filter(noteMatchesFilters);
+  }
+
+  function groupedNotes(notes) {
+    const group = state.noteGroup || 'teacher';
+    if (group === 'none') return [{ label: '全部留言', notes }];
+    const map = {};
+    notes.forEach((note) => {
+      const label = group === 'campus' ? (note.campus || '未记录分院') : noteTeacherName(note);
+      (map[label] = map[label] || []).push(note);
+    });
+    return Object.entries(map)
+      .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+      .map(([label, list]) => ({ label, notes: list }));
+  }
+
+  function renderNoteSummary(notes) {
+    const teachers = new Set(notes.map(noteTeacherName));
+    const students = new Set(notes.map((note) => note.studentRecordId || note.studentName).filter(Boolean));
+    const campuses = new Set(notes.map((note) => note.campus).filter(Boolean));
+    elSummary.innerHTML = [
+      ['今日留言', notes.length],
+      ['留言老师', teachers.size],
+      ['涉及学生', students.size],
+      ['分院数', campuses.size || '-']
+    ].map(([label, value]) => cardHtml(label, value)).join('');
+  }
+
+  function renderNoteTable(notes) {
+    if (elContent) elContent.hidden = false;
+    if (!notes.length) {
+      elContent.className = 'empty';
+      elContent.textContent = '当前筛选下没有老师留言。';
+      return;
+    }
+    const groups = groupedNotes(notes);
+    const groupCards = state.noteGroup === 'none' ? '' : `<section class="note-groups">
+      ${groups.map((group) => {
+        const students = new Set(group.notes.map((note) => note.studentRecordId || note.studentName).filter(Boolean));
+        return `<article class="note-group-card">
+          <strong>${escapeHtml(group.label)}</strong>
+          <span>${escapeHtml(group.notes.length)} 条留言 · ${escapeHtml(students.size)} 位学生</span>
+        </article>`;
+      }).join('')}
+    </section>`;
+    const rows = groups.map((group) => {
+      const heading = state.noteGroup === 'none' ? '' : `<tr class="note-group-row"><td colspan="8">${escapeHtml(group.label)} · ${escapeHtml(group.notes.length)} 条留言</td></tr>`;
+      return heading + group.notes.map((note) => `<tr class="note-row" data-note-id="${escapeHtml(note.id)}">
+        <td class="name"><strong>${escapeHtml(noteTeacherName(note))}</strong><span>${escapeHtml(note.teacherEmail || '')}</span></td>
+        <td>${escapeHtml(note.createdAt || '-')}</td>
+        <td class="name"><strong>${escapeHtml(note.studentName || '-')}</strong><span>${escapeHtml(note.studentNo || note.studentRecordId || '')}</span></td>
+        <td>${escapeHtml(note.campus || '-')}</td>
+        <td>${escapeHtml(note.block || '-')}</td>
+        <td>${escapeHtml(note.period || '-')}</td>
+        <td>${escapeHtml(note.ownerTeacher || '-')}</td>
+        <td class="note-text">${escapeHtml(note.note)}</td>
+      </tr>`).join('');
+    }).join('');
+    elContent.className = 'table-wrap';
+    elContent.innerHTML = `${groupCards}<table>
+      <thead>
+        <tr>
+          <th>留言老师</th>
+          <th>时间</th>
+          <th>学生</th>
+          <th>分院</th>
+          <th>BLOCK</th>
+          <th>早上/下午</th>
+          <th>负责老师</th>
+          <th>留言内容</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+    elContent.querySelectorAll('[data-note-id]').forEach((row) => {
+      row.addEventListener('click', () => openNoteDetail(notes.find((note) => note.id === row.dataset.noteId)));
+    });
+  }
+
+  function renderNotesView() {
+    if (elSummary) elSummary.hidden = false;
+    if (elStudentAnalysis) elStudentAnalysis.hidden = true;
+    if (elScopeNote) elScopeNote.hidden = true;
+    elSteps.hidden = true;
+    renderNoteFilters(state.data || {});
+    const notes = filteredNotes(state.data || {});
+    renderNoteSummary(notes);
+    renderNoteTable(notes);
+  }
+
   function renderCurrentView() {
     if (!state.data) return;
     if (state.view === 'teachers') renderTeachersView();
+    else if (state.view === 'notes') renderNotesView();
     else renderStudentsView();
   }
 
@@ -1063,6 +1299,27 @@
         }).join('')}
       </section>
     ` : '<div class="empty">没有学生记录。</div>';
+    elStudentModal.hidden = false;
+  }
+
+  function openNoteDetail(note) {
+    if (!note) return;
+    elStudentModalTitle.textContent = `留言：${note.studentName || '未记录学生'}`;
+    elStudentModalMeta.textContent = `${note.date || activeDate()} · ${noteTeacherName(note)}${note.createdAt ? ` · ${note.createdAt}` : ''}`;
+    elStudentModalBody.innerHTML = `
+      <section class="detail-list">
+        <div><span>留言老师</span><strong>${escapeHtml(noteTeacherName(note))}</strong></div>
+        <div><span>学生</span><strong>${escapeHtml(note.studentName || '-')}</strong></div>
+        <div><span>分院</span><strong>${escapeHtml(note.campus || '-')}</strong></div>
+        <div><span>BLOCK</span><strong>${escapeHtml(note.block || '-')}</strong></div>
+        <div><span>早上/下午</span><strong>${escapeHtml(note.period || '-')}</strong></div>
+        <div><span>负责老师</span><strong>${escapeHtml(note.ownerTeacher || '-')}</strong></div>
+      </section>
+      <section class="step-card">
+        <strong>留言内容</strong>
+        <p>${escapeHtml(note.note || '-')}</p>
+      </section>
+    `;
     elStudentModal.hidden = false;
   }
 
@@ -1237,7 +1494,9 @@
     Object.entries(filterEls).forEach(([key, el]) => {
       if (!el) return;
       el.addEventListener('change', () => {
-        if (key === 'teacher' && state.view === 'teachers') {
+        if (key === 'group') {
+          state.noteGroup = el.value || 'teacher';
+        } else if (key === 'teacher' && (state.view === 'teachers' || state.view === 'notes')) {
           state.filters.operator = el.value || '';
         } else {
           state.filters[key] = el.value || '';
