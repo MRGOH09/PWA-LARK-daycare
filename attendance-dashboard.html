@@ -387,11 +387,17 @@
     gap: 8px;
     width: 100%;
   }
-  .pie-stats span {
+  .pie-stats button {
     border-radius: 8px;
+    border: 0;
     background: var(--panel-2);
     padding: 9px;
     color: var(--muted);
+    cursor: pointer;
+    font-weight: 800;
+  }
+  .pie-stats button:hover {
+    outline: 2px solid var(--accent);
   }
   .pie-stats b {
     display: block;
@@ -563,6 +569,6 @@
   </div>
 </section>
 
-<script src="js/attendance-dashboard.js?v=21" defer></script>
+<script src="js/attendance-dashboard.js?v=22" defer></script>
 </body>
 </html>

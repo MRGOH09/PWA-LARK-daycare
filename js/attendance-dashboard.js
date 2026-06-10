@@ -810,11 +810,14 @@
         <strong>${escapeHtml(labels[step] || step)}</strong>
         <p>${pct}% 已点名</p>
         <div class="pie-stats">
-          <span>点名人数<b>${escapeHtml(item.checked)}</b></span>
-          <span>没有点<b>${escapeHtml(item.missing)}</b></span>
+          <button type="button" data-step-list="${escapeHtml(step)}" data-step-mode="checked">点名人数<b>${escapeHtml(item.checked)}</b></button>
+          <button type="button" data-step-list="${escapeHtml(step)}" data-step-mode="missing">没有点<b>${escapeHtml(item.missing)}</b></button>
         </div>
       </article>`;
     }).join('');
+    elSteps.querySelectorAll('[data-step-list]').forEach((btn) => {
+      btn.addEventListener('click', () => openStepList(btn.dataset.stepList, btn.dataset.stepMode, students));
+    });
   }
 
   function renderStudentTable(students) {
@@ -1006,6 +1009,61 @@
     if (!state.data) return;
     if (state.view === 'teachers') renderTeachersView();
     else renderStudentsView();
+  }
+
+  function stepActorLookup() {
+    const out = {};
+    ((state.data || {}).people || []).forEach((person) => {
+      (person.details || []).forEach((detail) => {
+        if (!detail.stepKey || !detail.studentRecordId) return;
+        const key = `${detail.date || ''}|||${detail.studentRecordId}|||${detail.stepKey}`;
+        if (!out[key]) {
+          out[key] = {
+            name: person.name || detail.actorName || detail.updatedByName || '',
+            email: person.email || detail.actorEmail || '',
+            at: detail.createdAt || detail.updatedAt || ''
+          };
+        }
+      });
+    });
+    return out;
+  }
+
+  function actorForStep(student, step, lookup) {
+    const key = `${student.date || ''}|||${student.studentRecordId || ''}|||${step}`;
+    return lookup[key] || {
+      name: student.updatedByName || '',
+      email: student.updatedByEmail || '',
+      at: student.updatedAt || ''
+    };
+  }
+
+  function openStepList(step, mode, students) {
+    const labels = (state.data || {}).stepLabels || {};
+    const checked = mode === 'checked';
+    const lookup = stepActorLookup();
+    const list = (students || []).filter((student) => {
+      const value = (student.steps || {})[step] || '未点';
+      return checked ? value !== '未点' : value === '未点';
+    });
+    elStudentModalTitle.textContent = `${labels[step] || step} · ${checked ? '已点名单' : '未点名单'}`;
+    elStudentModalMeta.textContent = `${activeDate()} · ${list.length} 人`;
+    elStudentModalBody.innerHTML = list.length ? `
+      <section class="steps-detail">
+        ${list.map((student) => {
+          const value = (student.steps || {})[step] || '未点';
+          const actor = checked ? actorForStep(student, step, lookup) : {};
+          const actorText = checked
+            ? `${actor.name || actor.email || '未记录点名老师'}${actor.at ? ` · ${actor.at}` : ''}`
+            : '还没有点名记录';
+          return `<div class="step-line">
+            <strong>${escapeHtml(student.studentName || '未记录学生')}<br><small>${escapeHtml([student.campus, student.year, student.block, student.period].filter(Boolean).join(' · '))}</small></strong>
+            <span>${escapeHtml(value)}<br><small>${escapeHtml(actorText)}</small></span>
+          </div>`;
+        }).join('')}
+      </section>
+    ` : '<div class="empty">没有学生记录。</div>';
+    elStudentModal.hidden = false;
   }
 
   function openStudentDetail(student) {
